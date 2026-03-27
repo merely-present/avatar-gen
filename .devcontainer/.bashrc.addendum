@@ -1,0 +1,32 @@
+#!/bin/bash
+
+printf "Do not run or source this file directly." >&2
+
+exit 1
+
+###
+
+# Source all files under ~/.bashrc.additions.d/sourced
+printf '\033[32msourced\033[0m:'
+while IFS= read -r -d '' _bash_additions_item; do
+  . "$_bash_additions_item"
+  printf " '%s'" "${_bash_additions_item#"$HOME/.bashrc.additions.d/sourced/"}"
+done < <(find "$HOME/.bashrc.additions.d/sourced" -type f -print0 | sort -z)
+
+# Add ~/.bashrc.additions.d/scripts to PATH
+export PATH="$HOME/.bashrc.additions.d/scripts:$PATH"
+
+# Execute all files under ~/.bashrc.additions.d/executed, once per shell session tree
+printf ' | \033[36mexecuted\033[0m:'
+if [ -t 0 ] && [ -z "$_BASHRC_RUN_ONCE_DONE" ]; then
+  export _BASHRC_RUN_ONCE_DONE=1
+  while IFS= read -r -d '' _bash_additions_item; do
+    if [ -x "$_bash_additions_item" ]; then
+      "$_bash_additions_item"
+      printf " '%s'" "${_bash_additions_item#"$HOME/.bashrc.additions.d/executed/"}"
+    fi
+  done < <(find "$HOME/.bashrc.additions.d/executed" -type f -print0 | sort -z)
+fi
+printf '\n'
+
+unset _bash_additions_item

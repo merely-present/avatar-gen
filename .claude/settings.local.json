@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E '\\\\.\\(ttf|otf\\)$')",
+      "Bash(python3 -c \"from fontTools.ttLib import woff2; print\\(''''fonttools woff2 ok''''\\)\")",
+      "Bash(node -e \"require.resolve\\(''''wawoff2''''\\)\")",
+      "Bash(npm info:*)",
+      "Bash(dnf list:*)",
+      "Bash(dnf info:*)"
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+- name: Install ImageMagick
+  ansible.builtin.dnf:
+    name:
+      - ImageMagick
+    state: present
+
+- name: Locate ImageMagick policy.xml
+  command: >
+    bash -c "magick -list configure | grep CONFIGURE_PATH | sed 's/.* //; s/$/policy.xml/'"
+  register: im_policy_path
+  changed_when: false
+
+- name: Set ImageMagick resource policies
+  blockinfile:
+    path: "{{ im_policy_path.stdout }}"
+    insertbefore: "</policymap>"
+    marker: "<!-- {mark} ANSIBLE MANAGED BLOCK -->"
+    block: |
+      <policy domain="resource" name="memory" value="8GiB"/>
+      <policy domain="resource" name="map" value="8GiB"/>
+      <policy domain="resource" name="area" value="2GP"/>
+      <policy domain="resource" name="disk" value="8GiB"/>

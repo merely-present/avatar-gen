@@ -1,0 +1,44 @@
+- name: Install NVM + Node
+  become: true
+  become_user: "{{ username }}"
+  environment:
+    HOME: "{{ user_home }}"
+  block:
+    - name: Install NVM
+      ansible.builtin.shell: |
+        set -euo pipefail
+        curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v{{ nvm_version }}/install.sh | PROFILE=/dev/null bash
+      args:
+        executable: /bin/bash
+        creates: "$HOME/.nvm/nvm.sh"
+
+    - name: Ensure NVM loads in bash shells
+      ansible.builtin.lineinfile:
+        path: "$HOME/.bashrc"
+        create: true
+        mode: "0644"
+        line: 'export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"'
+        insertafter: EOF
+
+    - name: Install Node via NVM
+      ansible.builtin.shell: |
+        set -euo pipefail
+        export NVM_DIR="$HOME/.nvm"
+        . "$NVM_DIR/nvm.sh"
+        nvm install "{{ node_version }}"
+        nvm alias default "{{ node_version }}"
+      args:
+        executable: /bin/bash
+        creates: "$HOME/.nvm/alias/default"
+
+    - name: Verify Node runs
+      ansible.builtin.shell: |
+        set -euo pipefail
+        export NVM_DIR="$HOME/.nvm"
+        . "$NVM_DIR/nvm.sh"
+        node -v
+      args:
+        executable: /bin/bash
+      register: node_check
+      changed_when: false
+      failed_when: node_check.stdout == ""

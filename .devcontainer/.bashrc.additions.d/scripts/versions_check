@@ -1,0 +1,196 @@
+#!/usr/bin/env bash
+
+# Ensure that this file is executed, not sourced
+if [[ ${BASH_SOURCE[0]} != "${0}" ]]; then
+    echo "This file must be executed, not sourced." >&2
+    return 1
+fi
+
+VERSION_CACHE_INTERVAL=86400
+
+VERSION_CACHE_FILE_NODE="$HOME/.bashrc.cache.d/version_check.node"
+VERSION_CACHE_FILE_NVM="$HOME/.bashrc.cache.d/version_check.nvm"
+VERSION_CACHE_FILE_FEDORA="$HOME/.bashrc.cache.d/version_check.fedora"
+
+_VERSION_COLOR_BEHIND_LTS=$'\e[38;2;229;155;98m'
+_VERSION_COLOR_BEHIND_LATEST=$'\e[38;2;216;229;98m'
+_VERSION_COLOR_EQUAL_LATEST=$'\e[38;2;98;229;157m'
+_VERSION_COLOR_AHEAD_LATEST=$'\e[38;2;98;229;225m'
+
+_TEXT_BOLD=$'\e[1m'
+
+_TEXT_COLOR_RESET=$'\e[0m'
+
+_DOES_NOT_SUPPORT_MARKER=$'\e[38;2;128;128;128mN/A\e[0m'
+
+
+_version_cache_is_fresh() {
+    local checked_at
+    [[ -f "$1" ]] || return 1
+    IFS= read -r checked_at < "$1" || return 1
+    (( $(date +%s) - $(date -d "$checked_at" +%s 2>/dev/null) < VERSION_CACHE_INTERVAL ))
+}
+
+_version_cache_read() {
+    local stamp latest lts
+    _version_cache_is_fresh "$1" || return 1
+    {
+        IFS= read -r stamp
+        IFS= read -r latest
+        IFS= read -r lts
+    } < "$1" || return 1
+    [[ -n "$latest" ]] || return 1
+    printf '%s\n%s\n' "$latest" "$lts"
+}
+
+_version_cache_write() {
+    mkdir -p -- "$(dirname "$1")" || return 1
+    printf '%s\n%s\n%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$2" "$3" > "$1"
+}
+
+_get_fresh_version_pair() {
+    local versions=()
+    mapfile -t versions < <("$2") || return 1
+    [[ ${#versions[@]} -ge 2 ]] || return 1
+    _version_cache_write "$1" "${versions[0]}" "${versions[1]}" || return 1
+    printf '%s\n%s\n' "${versions[0]}" "${versions[1]}"
+}
+
+_fetch_node_versions() {
+    curl -fsSL https://nodejs.org/dist/index.json | jq -r '
+        (map(.version | ltrimstr("v")) | max_by(split(".") | map(tonumber))),
+        (map(select(.lts != false) | .version | ltrimstr("v")) | max_by(split(".") | map(tonumber)))
+    '
+}
+
+_fetch_nvm_versions() {
+    local version
+    version="$(curl -fsSL https://api.github.com/repos/nvm-sh/nvm/releases/latest | jq -r '.tag_name | ltrimstr("v")')" || return 1
+    printf '%s\n%s\n' "$version" ""
+}
+
+_fetch_fedora_versions() {
+    local page_json tags_data url latest_digest version
+    url='https://hub.docker.com/v2/namespaces/library/repositories/fedora/tags?page_size=100'
+    tags_data=''
+    while [[ -n "$url" ]]; do
+        page_json="$(curl -fsSL "$url")" || return 1
+        tags_data+="$(printf '%s' "$page_json" | jq -r '.results[] | .name + " " + .digest')"$'\n'
+        url="$(printf '%s' "$page_json" | jq -r '.next // empty')"
+    done
+    latest_digest="$(printf '%s' "$tags_data" | grep '^latest ' | sed 's/^latest //')"
+    [[ -n "$latest_digest" ]] || return 1
+    version="$(printf '%s' "$tags_data" | grep " ${latest_digest}$" | grep -E '^[0-9]+ ' | sed 's/ .*//' | sort -n | tail -1)"
+    [[ -n "$version" ]] || return 1
+    printf '%s\n%s\n' "$version" ""
+}
+
+_get_cache_node()   { _version_cache_read "$VERSION_CACHE_FILE_NODE"; }
+_get_cache_nvm()    { _version_cache_read "$VERSION_CACHE_FILE_NVM"; }
+_get_cache_fedora() { _version_cache_read "$VERSION_CACHE_FILE_FEDORA"; }
+
+_get_fresh_node()   { _get_fresh_version_pair "$VERSION_CACHE_FILE_NODE" _fetch_node_versions; }
+_get_fresh_nvm()    { _get_fresh_version_pair "$VERSION_CACHE_FILE_NVM" _fetch_nvm_versions; }
+_get_fresh_fedora() { _get_fresh_version_pair "$VERSION_CACHE_FILE_FEDORA" _fetch_fedora_versions; }
+
+get_node()   { _get_cache_node   || _get_fresh_node; }
+get_nvm()    { _get_cache_nvm    || _get_fresh_nvm; }
+get_fedora() { _get_cache_fedora || _get_fresh_fedora; }
+
+_get_installed_node() {
+    command -v node >/dev/null 2>&1 || return 1
+    node -v | sed 's/^v//'
+}
+
+_get_installed_nvm() {
+    local nvm_dir="${NVM_DIR:-$HOME/.nvm}"
+    [[ -f "$nvm_dir/package.json" ]] || return 1
+    jq -r '.version' "$nvm_dir/package.json"
+}
+
+_get_installed_fedora() (
+    [[ -r /etc/os-release ]] || return 1
+    . /etc/os-release
+    [[ -n "$VERSION_ID" ]] || return 1
+    printf '%s\n' "$VERSION_ID"
+)
+
+_version_cmp() {
+    local a="${1#v}" b="${2#v}"
+    [[ "$a" == "$b" ]] && { printf '0\n'; return; }
+    [[ "$(printf '%s\n%s\n' "$a" "$b" | sort -V | head -1)" == "$a" ]] && printf -- '-1\n' || printf '1\n'
+}
+
+_version_first_diff_part() {
+    local -a a=() b=()
+    local i count=0
+    IFS=. read -r -a a <<< "${1#v}"
+    IFS=. read -r -a b <<< "${2#v}"
+    count=${#a[@]}
+    (( ${#b[@]} > count )) && count=${#b[@]}
+
+    for ((i = 0; i < count; i++)); do
+        (( ${a[i]:-0} != ${b[i]:-0} )) && { printf '%s\n' "$((i + 1))"; return; }
+    done
+
+    printf '0\n'
+}
+
+_colorize_installed_version() {
+    local installed="${1#v}" latest="${2#v}" lts="${3#v}"
+    local latest_cmp lts_cmp latest_diff lts_diff latest_start
+    local -a parts=()
+    local i out= sep= color
+
+    [[ "$installed" =~ ^[0-9]+([.][0-9]+)*$ ]] || { printf '%s' "$1"; return; }
+    [[ "$latest"    =~ ^[0-9]+([.][0-9]+)*$ ]] || { printf '%s' "$1"; return; }
+
+    latest_cmp="$(_version_cmp "$installed" "$latest")"
+    latest_diff="$(_version_first_diff_part "$installed" "$latest")"
+    latest_start=$(( latest_diff > 1 ? latest_diff - 1 : latest_diff ))
+    if [[ "$lts" =~ ^[0-9]+([.][0-9]+)*$ ]]; then
+        lts_cmp="$(_version_cmp "$installed" "$lts")"
+        lts_diff="$(_version_first_diff_part "$installed" "$lts")"
+    fi
+
+    IFS=. read -r -a parts <<< "$installed"
+
+    for ((i = 1; i <= ${#parts[@]}; i++)); do
+        color="$_VERSION_COLOR_EQUAL_LATEST"
+
+        [[ "$latest_cmp" == "1"  && "$latest_diff"  -gt 0 && "$i" -ge "$latest_diff"  ]] && color="$_VERSION_COLOR_AHEAD_LATEST"
+        [[ "$latest_cmp" == "-1" && "$latest_start" -gt 0 && "$i" -ge "$latest_start" ]] && color="$_VERSION_COLOR_BEHIND_LATEST"
+        [[ -n "$lts_cmp" && "$lts_cmp" == "-1" && "$lts_diff" -gt 0 && "$i" -ge "$lts_diff" ]] && color="$_VERSION_COLOR_BEHIND_LTS"
+
+        out+="$sep$color${parts[i-1]}$_TEXT_COLOR_RESET"
+        sep='.'
+    done
+
+    printf '%s' "$out"
+}
+
+version_check() {
+    printf '\n%sDevcontainer Version Check%s\n' "$_TEXT_BOLD" "$_TEXT_RESET"
+    
+    local node=() nvm=() fedora=()
+    local node_inst nvm_inst fedora_inst
+
+    mapfile -t node < <(get_node) || return 1
+    mapfile -t nvm < <(get_nvm) || return 1
+    mapfile -t fedora < <(get_fedora) || return 1
+
+    node_inst="$(_get_installed_node 2>/dev/null || printf '%s' "$_DOES_NOT_SUPPORT_MARKER")"
+    nvm_inst="$(_get_installed_nvm 2>/dev/null || printf '%s' "$_DOES_NOT_SUPPORT_MARKER")"
+    fedora_inst="$(_get_installed_fedora 2>/dev/null || printf '%s' "$_DOES_NOT_SUPPORT_MARKER")"
+
+    {
+        printf '%sName|Installed|Latest|LTS%s\n' "$_TEXT_BOLD" "$_TEXT_COLOR_RESET"
+        printf 'Node.js|%s|%s|%s\n' "$(_colorize_installed_version "${node_inst:-$_DOES_NOT_SUPPORT_MARKER}" "${node[0]:-$_DOES_NOT_SUPPORT_MARKER}" "${node[1]:-$_DOES_NOT_SUPPORT_MARKER}")" "${node[0]:-$_DOES_NOT_SUPPORT_MARKER}" "${node[1]:-$_DOES_NOT_SUPPORT_MARKER}"
+        printf 'nvm|%s|%s|%s\n' "$(_colorize_installed_version "${nvm_inst:-$_DOES_NOT_SUPPORT_MARKER}" "${nvm[0]:-$_DOES_NOT_SUPPORT_MARKER}" "${nvm[1]:-$_DOES_NOT_SUPPORT_MARKER}")" "${nvm[0]:-$_DOES_NOT_SUPPORT_MARKER}" "${nvm[1]:-$_DOES_NOT_SUPPORT_MARKER}"
+        printf 'Fedora|%s|%s|%s\n' "$(_colorize_installed_version "${fedora_inst:-$_DOES_NOT_SUPPORT_MARKER}" "${fedora[0]:-$_DOES_NOT_SUPPORT_MARKER}" "${fedora[1]:-$_DOES_NOT_SUPPORT_MARKER}")" "${fedora[0]:-$_DOES_NOT_SUPPORT_MARKER}" "${fedora[1]:-$_DOES_NOT_SUPPORT_MARKER}"
+    } | column -t -s '|' -o ' | '
+}
+
+[[ "${1:-}" == '--no-cache' ]] && rm -f "$VERSION_CACHE_FILE_NODE" "$VERSION_CACHE_FILE_NVM" "$VERSION_CACHE_FILE_FEDORA"
+
+version_check

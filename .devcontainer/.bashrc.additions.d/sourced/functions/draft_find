@@ -1,0 +1,75 @@
+#!/bin/bash
+
+# Ensure that this file is sourced, not executed
+if [[ ${BASH_SOURCE[0]} == "${0}" ]]; then
+    echo "This file must be sourced, not executed." >&2
+    exit 1
+fi
+
+
+# Function to provide an interactive template for the 'find' command with regex support
+draft_find() {
+  local find_quick_guide_message
+  read -r -d '' find_quick_guide_message <<'EOF'
+"find -regex" cheatsheet:
+  Regex type: "-regextype posix-extended" is usually the most advanced.
+  "find -regextype help" lists types available in error message.
+  "-regex" matches the whole path (not just the basename)
+  Character classes instead of typical meta sequences.
+  Character classes go inside [...] and have "[" and "]" around the class name themselves.
+
+PCRE/ECMAScript-ish equivalents:
+  [[:lower:]] = [a-z]    [[:upper:]] = [A-Z]            [[:alpha:]] = [A-Za-z]
+  [[:digit:]] = [0-9]    [[:alnum:]] = [A-Za-z0-9]      [[:xdigit:]] = [0-9A-Fa-f]
+  [[:blank:]] = [ \t]    [[:space:]] = [ \t\r\n\v\f]
+  [[:graph:]] = [!-~]    [[:print:]] = [ -~]            [[:punct:]] is "ASCII punctuation"
+  [[:cntrl:]] is "control chars"
+EOF
+
+  local help_message
+  read -r -d '' help_message <<'EOF'
+Usage: draft_find [search_path] [regex_pattern]
+  search_path:   Directory to start search from. Default is current directory (.)
+  regex_pattern: Regular expression pattern to match file paths. Default is '.*/' (all files)
+  -h, --help:    Show this help message
+EOF
+
+  local template_line
+  local edited_line
+
+  local search_path='.'
+  local regex_pattern='.*/'
+  printf -v regex_pattern "%q" "$regex_pattern"
+
+  local help=false
+  local error=false
+
+  if [ $# -gt 0 ] && [ $# -le 2 ]; then
+    for arg in "$@"; do
+      case "$arg" in
+        -h|--help)
+          help=true
+          ;;
+      esac
+    done
+
+    printf -v search_path="%q" "$1"
+    
+    if [ $# -ge 2 ]; then
+      printf -v regex_pattern="%q" "$2"
+    fi
+  elif [ $# -gt 2 ]; then
+    error=true
+    printf '%s\n\n%s\n\n' "Error: Too many arguments." "$help_message" >&2
+  fi
+
+  printf '%s\n' "$find_quick_guide_message"
+
+  [ "$help" = true ] && return 0
+  [ "$error" = true ] && return 1
+
+  local template_line="find ${search_path} -mindepth 1 -maxdepth 8 -print -regextype posix-extended -regex ${regex_pattern}"
+
+  read -e -i "$template_line 2>/dev/null" -r edited_line
+  history -s "$edited_line"
+}

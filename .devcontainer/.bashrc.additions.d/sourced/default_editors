@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# Ensure that this file is sourced, not executed
+if [[ ${BASH_SOURCE[0]} == "${0}" ]]; then
+    echo "This file must be sourced, not executed." >&2
+    exit 1
+fi
+
+
+# Set the default editor
+export EDITOR=nano
+
+# Set default visual editor
+export VISUAL='code --wait --reuse-window'

@@ -1,0 +1,5 @@
+- name: Install Chromium
+  ansible.builtin.dnf:
+    name:
+      - chromium
+    state: present

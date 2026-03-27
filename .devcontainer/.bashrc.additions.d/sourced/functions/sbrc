@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# Ensure that this file is sourced, not executed
+if [[ ${BASH_SOURCE[0]} == "${0}" ]]; then
+    echo "This file must be sourced, not executed." >&2
+    exit 1
+fi
+
+
+# Function to source .bashrc
+sbrc() {
+    source "$HOME/.bashrc"
+}

@@ -1,0 +1,57 @@
+- name: Install development tools
+  ansible.builtin.dnf:
+    name:
+      - "@development-tools" # Adds libatomic for node
+      - curl
+      - git
+      - jq
+      - nano
+      - python3-ansible-lint
+      - shadow-utils
+      - sudo
+      - tree
+      - which
+    state: present
+
+- name: Create user group first
+  ansible.builtin.group:
+    name: "{{ username }}"
+    gid: "{{ user_gid }}"
+    state: present
+
+- name: Create user with explicit UID/GID
+  ansible.builtin.user:
+    name: "{{ username }}"
+    uid: "{{ user_uid }}"
+    group: "{{ username }}"
+    groups: wheel
+    append: true
+    shell: /bin/bash
+    create_home: true
+    home: "{{ user_home }}"
+    state: present
+
+- name: Ensure home directory has correct ownership
+  ansible.builtin.file:
+    path: "{{ user_home }}"
+    owner: "{{ username }}"
+    group: "{{ username }}"
+    mode: "0755"
+    state: directory
+
+- name: Passwordless sudo for wheel
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/99-wheel-nopasswd
+    content: "%wheel ALL=(ALL) NOPASSWD: ALL\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "visudo -cf %s"
+
+- name: Create workspaces directory
+  ansible.builtin.file:
+    path: /workspaces
+    owner: "{{ username }}"
+    group: "{{ username }}"
+    mode: "0755"
+    state: directory

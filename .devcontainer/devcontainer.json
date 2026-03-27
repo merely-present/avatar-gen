@@ -1,0 +1,44 @@
+{
+	"name": "Dev Container (Fedora + Node.js)",
+	"runArgs": [
+		"--platform=linux/amd64",
+		"--network=pasta:--tcp-ns,1234:1234",
+		"--userns=keep-id"
+	],
+	"updateRemoteUserUID": true,
+	"remoteUser": "user",
+	"remoteEnv": {
+		"ANSIBLE_HOME": "/home/user/.ansible"
+	},
+	"build": {
+		"dockerfile": "Containerfile",
+		"args": {
+			"FEDORA_VERSION": "latest",
+			"NVM_VERSION": "0.40.4",
+			"NODE_VERSION": "25",
+			"USERNAME": "user",
+			"USER_UID": "1000",
+			"USER_GID": "1000"
+		}
+	},
+	"workspaceMount": "type=bind,source=${localWorkspaceFolder},target=/workspace/${localWorkspaceFolderBasename}",
+	"workspaceFolder": "/workspace/${localWorkspaceFolderBasename}",
+	"mounts": [
+		// Mount the .bashrc additions devcontainer directory
+		"type=bind,source=${localWorkspaceFolder}/.devcontainer/.bashrc.additions.d,target=/home/user/.bashrc.additions.d"
+	],
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-python.python",
+				"redhat.vscode-yaml",
+				"redhat.ansible"
+			],
+			"settings": {
+				"python.defaultInterpreterPath": "/usr/bin/python3",
+				"ansible.python.interpreterPath": "/usr/bin/python3",
+				"ansible.lightspeed.enabled": false
+			}
+		}
+	}
+}

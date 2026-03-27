@@ -1,0 +1,18 @@
+- name: Append .bashrc.addendum to .bashrc
+  become: true
+  become_user: "{{ username }}"
+  environment:
+    HOME: "{{ user_home }}"
+  ansible.builtin.blockinfile:
+    path: "$HOME/.bashrc"
+    marker: "# {mark} MANAGED BLOCK - bashrc.addendum"
+    block: "{{ lookup('file', '.bashrc.addendum').split('\n###\n', 1)[1] }}"
+    insertafter: EOF
+
+- name: Fix home directory ownership
+  ansible.builtin.file:
+    path: "{{ user_home }}"
+    owner: "{{ username }}"
+    group: "{{ username }}"
+    recurse: true
+    state: directory

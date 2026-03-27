@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# Ensure that this file is sourced, not executed
+if [[ ${BASH_SOURCE[0]} == "${0}" ]]; then
+    echo "This file must be sourced, not executed." >&2
+    exit 1
+fi
+
+
+# Date Time Settings
+
+# Set readable time style for LS etc
+export TIME_STYLE='+%F %H:%M:%S %z'
+
+# Set Timezone to local
+export TZ='America/Toronto'

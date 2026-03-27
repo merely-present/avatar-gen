@@ -1,0 +1,27 @@
+- name: Check if Claude Code CLI is installed
+  ansible.builtin.command: which claude
+  register: claude_installed
+  changed_when: false
+  failed_when: false
+
+- name: Install Claude Code CLI
+  become: true
+  become_user: "{{ username }}"
+  environment:
+    HOME: "{{ user_home }}"
+  ansible.builtin.shell: |
+    set -euo pipefail
+    curl -fsSL https://claude.ai/install.sh | bash
+  args:
+    executable: /bin/bash
+  when: claude_installed.rc != 0
+
+- name: Ensure .claude directory is owned by user
+  become: true
+  ansible.builtin.file:
+    path: "{{ user_home }}/.claude"
+    owner: "{{ username }}"
+    group: "{{ username }}"
+    mode: "0755"
+    recurse: true
+    state: directory

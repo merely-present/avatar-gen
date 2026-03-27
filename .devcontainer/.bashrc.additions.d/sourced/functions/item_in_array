@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# Ensure that this file is sourced, not executed
+if [[ ${BASH_SOURCE[0]} == "${0}" ]]; then
+    echo "This file must be sourced, not executed." >&2
+    exit 1
+fi
+
+
+# Find Item in Array Function
+item_in_array(){ local s="${1-}" t h d=$'\n'; shift||return 1; (( $# ))||return 1; printf -v t '%q' "$s"; printf -v h '%q\n' "$@"; h="$d$h"; [[ $h == *"$d$t$d"* ]]; }

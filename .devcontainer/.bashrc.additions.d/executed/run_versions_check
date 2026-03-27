@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+# Ensure that this file is executed, not sourced
+if [[ ${BASH_SOURCE[0]} != "${0}" ]]; then
+    echo "This file must be executed, not sourced." >&2
+    return 1
+fi
+
+
+versions_check

@@ -1,0 +1,15 @@
+{
+  "scripts": {
+    "generate": "node src/generate_avatar.js",
+    "generate-animated": "node src/generate_animated_avatar.js",
+    "convert": "node src/generate_conversion.mjs",
+    "generate-cycle-fonts": "node src/generate_cycle_fonts.js",
+    "add-completions": "mkdir -p ~/.bashrc.d && npm completion > ~/.bashrc.d/node-js-completions",
+    "pull-fonts": "node src/pull_fonts.js"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "puppeteer-core": "^24.40.0",
+    "sharp": "^0.33.5"
+  }
+}
