@@ -3,7 +3,6 @@
 
 const fs   = require('fs');
 const path = require('path');
-const os   = require('os');
 const { execSync } = require('child_process');
 
 function showHelp() {
@@ -11,10 +10,8 @@ function showHelp() {
         'Usage: npm run pull-fonts\n' +
         '       node src/pull_fonts.js\n' +
         '\n' +
-        'Installs each font listed in config/fonts.json from fontsource\n' +
-        'and copies font files to ~/.local/share/fonts.\n' +
-        '\n' +
-        'Fonts are then picked up automatically by resvg via loadSystemFonts.\n' +
+        'Installs each font listed in config/fonts.json from fontsource into\n' +
+        'node_modules. Fonts are used directly from there at render time.\n' +
         'Packages that are not found on fontsource are skipped with a warning.\n' +
         '\n' +
         'Edit config/fonts.json to add or remove fonts.\n'
@@ -23,40 +20,54 @@ function showHelp() {
 
 if (process.argv.slice(2).some(a => a === '--help' || a === '-h')) { showHelp(); process.exit(0); }
 
-const ROOT      = path.join(__dirname, '..');
-const FONTS_DIR = path.join(os.homedir(), '.local', 'share', 'fonts');
-const fonts     = JSON.parse(fs.readFileSync(path.join(ROOT, 'config', 'fonts.json'), 'utf8'));
+const ROOT  = path.join(__dirname, '..');
+const fonts = JSON.parse(fs.readFileSync(path.join(ROOT, 'config', 'fonts.json'), 'utf8'));
 
-fs.mkdirSync(FONTS_DIR, { recursive: true });
+// Separate already-installed from missing
+const missing  = fonts.filter(f => !fs.existsSync(path.join(ROOT, 'node_modules', f.package)));
+const existing = fonts.filter(f =>  fs.existsSync(path.join(ROOT, 'node_modules', f.package)));
 
-for (const font of fonts) {
-    process.stdout.write(`  ${font.name} (${font.package})… `);
-    try {
-        execSync(`npm install --no-save ${font.package}`, {
-            cwd:   ROOT,
-            stdio: ['pipe', 'pipe', 'pipe'],
-        });
-    } catch {
-        console.log('not found on fontsource, skipping');
-        continue;
-    }
-
-    // Collect font files from the package's files/ subdir
-    const pkgFilesDir = path.join(ROOT, 'node_modules', font.package, 'files');
-    let entries;
-    try {
-        entries = fs.readdirSync(pkgFilesDir);
-    } catch {
-        console.log('installed but no files/ directory found, skipping');
-        continue;
-    }
-
-    const EXTS = new Set(['.ttf', '.otf', '.woff2', '.woff']);
-    const toCopy = entries.filter(f => EXTS.has(path.extname(f).toLowerCase()));
-    for (const file of toCopy) {
-        fs.copyFileSync(path.join(pkgFilesDir, file), path.join(FONTS_DIR, file));
-    }
-    console.log(`${toCopy.length} file(s) copied`);
+for (const font of existing) {
+    console.log(`  ${font.name} (${font.package})… already installed, skipping`);
 }
 
-console.log(`\nDone: ${FONTS_DIR}`);
+if (missing.length === 0) {
+    console.log('\nDone');
+    process.exit(0);
+}
+
+// Try installing all missing packages in one call (fast path).
+// If that fails (e.g. one package doesn't exist), fall back to checking
+// each individually via npm view, then install the valid ones together.
+// Using --save-optional so packages are recorded in optionalDependencies,
+// distinct from actual runtime dependencies.
+const packages = missing.map(f => f.package).join(' ');
+console.log(`  Installing: ${missing.map(f => f.name).join(', ')}…`);
+let batchOk = false;
+try {
+    execSync(`npm install --save-optional ${packages}`, { cwd: ROOT, stdio: 'inherit' });
+    batchOk = true;
+} catch {
+    console.log('  Batch install failed. Retrying individually to identify bad packages…');
+}
+
+if (!batchOk) {
+    console.log('  Checking which packages exist on the registry…');
+    const valid = [];
+    for (const font of missing) {
+        process.stdout.write(`  ${font.name} (${font.package})… `);
+        try {
+            execSync(`npm view ${font.package} version`, { cwd: ROOT, stdio: ['pipe', 'pipe', 'pipe'] });
+            valid.push(font.package);
+            console.log('found');
+        } catch {
+            console.log('not found on fontsource, skipping');
+        }
+    }
+    if (valid.length > 0) {
+        console.log(`  Installing valid packages…`);
+        execSync(`npm install --save-optional ${valid.join(' ')}`, { cwd: ROOT, stdio: 'inherit' });
+    }
+}
+
+console.log('\nDone');

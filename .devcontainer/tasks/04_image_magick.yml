@@ -16,7 +16,7 @@
     insertbefore: "</policymap>"
     marker: "<!-- {mark} ANSIBLE MANAGED BLOCK -->"
     block: |
-      <policy domain="resource" name="memory" value="8GiB"/>
-      <policy domain="resource" name="map" value="8GiB"/>
-      <policy domain="resource" name="area" value="2GP"/>
-      <policy domain="resource" name="disk" value="8GiB"/>
+      <policy domain="resource" name="memory" value="16GiB"/>
+      <policy domain="resource" name="map" value="16GiB"/>
+      <policy domain="resource" name="area" value="4GP"/>
+      <policy domain="resource" name="disk" value="16GiB"/>

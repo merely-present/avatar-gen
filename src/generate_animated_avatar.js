@@ -3,7 +3,6 @@
 
 const fs   = require('fs');
 const path = require('path');
-const os   = require('os');
 const { execSync } = require('child_process');
 const puppeteer    = require('puppeteer-core');
 
@@ -229,15 +228,19 @@ console.log(`  FPS: ${fps}   Resolution: ${res}×${res}`);
 console.log(`  Seeds: ${seeds.join(', ')}`);
 
 // ---------------------------------------------------------------------------
-// Font embedding helper — reads WOFF2 from ~/.local/share/fonts and returns
-// @font-face CSS for inline embedding in the Puppeteer HTML page.
+// Font embedding helper — reads WOFF2 from node_modules/@fontsource/<slug>/files/
+// and returns @font-face CSS for inline embedding in the Puppeteer HTML page.
 // ---------------------------------------------------------------------------
-const USER_FONTS_DIR = path.join(os.homedir(), '.local', 'share', 'fonts');
+const FONTSOURCE_DIR = path.join(__dirname, '..', 'node_modules', '@fontsource');
 
 function buildFontFaceCSS(fontFamily) {
-    const slug = fontFamily.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    let allFiles;
-    try { allFiles = fs.readdirSync(USER_FONTS_DIR); } catch { return null; }
+    const slug     = fontFamily.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const filesDir = path.join(FONTSOURCE_DIR, slug, 'files');
+    if (!fs.existsSync(path.join(FONTSOURCE_DIR, slug))) {
+        console.error(`Error: font '${fontFamily}': package not found in node_modules. Run \`npm run pull-fonts\` to install fonts.`);
+        process.exit(1);
+    }
+    const allFiles = fs.readdirSync(filesDir);
     let matching = allFiles.filter(f => f.startsWith(slug + '-latin') && f.endsWith('.woff2'));
     if (matching.length === 0)
         matching = allFiles.filter(f => f.startsWith(slug) && f.endsWith('.woff2'));
@@ -246,14 +249,18 @@ function buildFontFaceCSS(fontFamily) {
         const m      = file.match(/-(\d+)-(normal|italic)\.woff2$/);
         const weight = m ? m[1] : '400';
         const style  = m ? m[2] : 'normal';
-        const b64    = fs.readFileSync(path.join(USER_FONTS_DIR, file)).toString('base64');
+        const b64    = fs.readFileSync(path.join(filesDir, file)).toString('base64');
         return `@font-face{font-family:'${fontFamily}';src:url('data:font/woff2;base64,${b64}')format('woff2');font-weight:${weight};font-style:${style};}`;
     }).join('');
 }
 
 (async () => {
     const fontName = passthroughKV['text-font'] || 'DejaVu Sans Mono';
-    const fontCss  = buildFontFaceCSS(fontName) || '';
+    const fontCss  = buildFontFaceCSS(fontName);
+    if (fontCss === null) {
+        console.error(`Error: font '${fontName}': no WOFF2 files found in ${path.join(FONTSOURCE_DIR, fontName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''), 'files')}.\nRun \`npm run pull-fonts\` to install fonts.`);
+        process.exit(1);
+    }
 
     const browser = await puppeteer.launch({ executablePath: CHROMIUM_EXEC, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
     const page    = await browser.newPage();
@@ -266,6 +273,15 @@ function buildFontFaceCSS(fontFamily) {
     await page.evaluate(() => document.fonts.ready);
 
     const pngPaths = [];
+
+    const BAR_EIGHTHS = [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
+    function makeBar(fraction, width) {
+        const exact   = Math.min(1, Math.max(0, fraction)) * width;
+        const full    = Math.floor(exact);
+        const partial = Math.floor((exact - full) * 8);
+        return '█'.repeat(full) +
+               (full < width ? BAR_EIGHTHS[partial] + ' '.repeat(width - full - 1) : '');
+    }
 
     for (let frame = 0; frame < totalFrames; frame++) {
         const timeMs      = frame * msPerFrame;
@@ -309,9 +325,13 @@ function buildFontFaceCSS(fontFamily) {
         fs.writeFileSync(pngPath, png);
         pngPaths.push(pngPath);
 
+        const frameBar  = makeBar((frame + 1) / totalFrames, 20);
+        const factorBar = makeBar(factor, 20);
         process.stdout.write(
             `\r  Frame ${String(frame + 1).padStart(String(totalFrames).length)}/${totalFrames}` +
-            `  cycle ${cycleIndex + 1}  factor ${factor.toFixed(3)}`
+            `  |\x1b[93m${frameBar}\x1b[0m|` +
+            `  cycle ${cycleIndex + 1}/${twinkleCycles}` +
+            `  factor ${factor.toFixed(3)}  |\x1b[94m${factorBar}\x1b[0m|`
         );
     }
     console.log('');

@@ -1,14 +1,50 @@
 [
-  { "name": "Cascadia Mono",       "package": "@fontsource/cascadia-mono" },
-  { "name": "Combo",               "package": "@fontsource/combo" },
-  { "name": "Ubuntu Mono",         "package": "@fontsource/ubuntu-mono" },
-  { "name": "Share Tech Mono",     "package": "@fontsource/share-tech-mono" },
-  { "name": "Kode Mono",           "package": "@fontsource/kode-mono" },
-  { "name": "Bytesized",           "package": "@fontsource/bytesized" },
-  { "name": "Syne Mono",           "package": "@fontsource/syne-mono" },
-  { "name": "Monofett",            "package": "@fontsource/monofett" },
-  { "name": "Fragment Mono",       "package": "@fontsource/fragment-mono" },
-  { "name": "LXGW WenKai Mono TC", "package": "@fontsource/lxgw-wenkai-mono-tc" },
-  { "name": "Atari Classic",       "package": "@fontsource/atari-classic" },
-  { "name": "Terminus",            "package": "@fontsource/terminus" }
+  {
+    "name": "Cascadia Mono",
+    "package": "@fontsource/cascadia-mono"
+  },
+  {
+    "name": "Combo",
+    "package": "@fontsource/combo"
+  },
+  {
+    "name": "Ubuntu Mono",
+    "package": "@fontsource/ubuntu-mono"
+  },
+  {
+    "name": "Share Tech Mono",
+    "package": "@fontsource/share-tech-mono"
+  },
+  {
+    "name": "Kode Mono",
+    "package": "@fontsource/kode-mono"
+  },
+  {
+    "name": "Bytesized",
+    "package": "@fontsource/bytesized"
+  },
+  {
+    "name": "Syne Mono",
+    "package": "@fontsource/syne-mono"
+  },
+  {
+    "name": "Monofett",
+    "package": "@fontsource/monofett"
+  },
+  {
+    "name": "Fragment Mono",
+    "package": "@fontsource/fragment-mono"
+  },
+  {
+    "name": "LXGW WenKai Mono TC",
+    "package": "@fontsource/lxgw-wenkai-mono-tc"
+  },
+  {
+    "name": "Press Start 2P",
+    "package": "@fontsource/press-start-2p"
+  },
+  {
+    "name": "VT323",
+    "package": "@fontsource/vt323"
+  }
 ]

@@ -3,20 +3,18 @@
 
 const fs   = require('fs');
 const path = require('path');
-const os   = require('os');
 const { parseArgs } = require('util');
+
+const FONTSOURCE_DIR = path.join(__dirname, '..', 'node_modules', '@fontsource');
 
 function fontStatus() {
     const fontsJsonPath = path.join(__dirname, '..', 'config', 'fonts.json');
-    const userFontsDir  = path.join(os.homedir(), '.local', 'share', 'fonts');
     let fonts;
     try { fonts = JSON.parse(fs.readFileSync(fontsJsonPath, 'utf8')); }
     catch { return '  (config/fonts.json not found)'; }
-    let installed = [];
-    try { installed = fs.readdirSync(userFontsDir); } catch {}
     return fonts.map(f => {
         const slug  = f.package.replace('@fontsource/', '');
-        const found = installed.some(file => file.startsWith(slug + '-'));
+        const found = fs.existsSync(path.join(FONTSOURCE_DIR, slug));
         return `  ${found ? '✓' : '✗'} ${f.name.padEnd(24)} ${found ? 'installed' : 'not installed'}`;
     }).join('\n');
 }
@@ -73,7 +71,7 @@ function showHelp() {
         'Text:\n' +
         '  --text <string>                    Text content; \\n for newlines  [merely\\npresent]\n' +
         '  --text-size <n>                    Font size px  [40]\n' +
-        '  --text-line-height <n>             Line spacing multiplier  [1.0]\n' +
+        '  --text-line-height <n>             Line spacing multiplier (1.0 = font\'s natural line height)  [1.0]\\n' +
         '  --text-glow-distance <n>           Glow blur spread px  [4]\n' +
         '  --text-glow-strength <n>           Glow intensity 0-1+  [1.0]\n' +
         '  --text-backing-spread <n>          Black backing shadow blur, px  [5]\n' +
@@ -81,7 +79,7 @@ function showHelp() {
         '  --text-backing-opacity <n>         Backing shadow opacity 0-1  [0.9]\n' +
         '  --text-font <name>                 Font family name  [DejaVu Sans Mono]\n' +
         '\n' +
-        'Fonts — loaded from ~/.local/share/fonts (edit config/fonts.json to manage):\n' +
+        'Fonts — loaded from node_modules/@fontsource (edit config/fonts.json to manage):\n' +
         fontStatus() + '\n' +
         '\n' +
         '  Run `npm run pull-fonts` to install all fonts listed in config/fonts.json\n'
@@ -126,7 +124,7 @@ const { values: args } = parseArgs({
         'polygon-node-glow-twinkle':   { type: 'string', default: '6' },
         'seed':                        { type: 'string' },
         'polygon-node-twinkle-strength': { type: 'string', default: '1' },
-        'text':                      { type: 'string', default: 'merely\npresent' },
+        'text':                      { type: 'string', default: '/^merely\npresent/' },
         'text-size':            { type: 'string', default: '40' },
         'text-line-height':     { type: 'string', default: '1.0' },
         'text-glow-distance':   { type: 'string', default: '4' },
@@ -386,6 +384,43 @@ function lerp_oklch(c1, c2, t) {
     return `oklch(${L.toFixed(4)} ${C.toFixed(4)} ${H.toFixed(2)})`;
 }
 
+// Font metrics — resolve a WOFF2 file for a given font family from node_modules/@fontsource,
+// then use fontkit to measure the actual advance width of a string at a given font-size.
+// Returns null if the font file is not found or measurement fails, so callers can fall back.
+function findFontFile(family) {
+    const slug     = family.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const filesDir = path.join(FONTSOURCE_DIR, slug, 'files');
+    if (!fs.existsSync(path.join(FONTSOURCE_DIR, slug))) return null;
+    let allFiles;
+    try { allFiles = fs.readdirSync(filesDir); } catch { return null; }
+    let matching = allFiles.filter(f => f.startsWith(slug + '-latin') && f.endsWith('.woff2'));
+    if (matching.length === 0)
+        matching = allFiles.filter(f => f.startsWith(slug) && f.endsWith('.woff2'));
+    if (matching.length === 0) return null;
+    // Prefer weight-500 (used in SVG), then 400, then any
+    return path.join(filesDir,
+        matching.find(f => f.includes('-500-normal'))
+        ?? matching.find(f => f.includes('-400-normal'))
+        ?? matching[0]);
+}
+
+function measureTextWidth(text, fontFamily, fontSize) {
+    const fontPath = findFontFile(fontFamily);
+    if (!fontPath) throw new Error(`Font '${fontFamily}' not found in node_modules/@fontsource. Run \`npm run pull-fonts\` to install fonts.`);
+    const fontkit = require('fontkit');
+    const font = fontkit.openSync(fontPath);
+    const run = font.layout(text);
+    return run.advanceWidth / font.unitsPerEm * fontSize;
+}
+
+function measureLineHeight(fontFamily, fontSize) {
+    const fontPath = findFontFile(fontFamily);
+    if (!fontPath) throw new Error(`Font '${fontFamily}' not found in node_modules/@fontsource. Run \`npm run pull-fonts\` to install fonts.`);
+    const fontkit = require('fontkit');
+    const font = fontkit.openSync(fontPath);
+    return (font.ascent - font.descent + font.lineGap) / font.unitsPerEm * fontSize;
+}
+
 // Seeded PRNG (mulberry32) for deterministic twinkle node selection.
 function mulberry32(seed) {
     return function() {
@@ -444,15 +479,21 @@ if (TEXT_BACKING_SPREAD > 0) out.push(`    <filter id="text_backing" x="-40%" y=
       <feGaussianBlur in="solid" stdDeviation="${TEXT_BACKING_SPREAD}"/>
     </filter>`);
 
-// Per-layer flower fade: blur the alpha channel so the fade follows the actual shape
-// perimeter exactly (lobes and concave sections alike), not a radial gradient from center.
-// FLOWER_LAYER_BLUR is the Gaussian sigma in pixels — the fade distance from the boundary.
+// Per-layer flower fade: spreads the layer colour outward so each layer fades to
+// transparent beyond its own edge. Strategy:
+//   1. Blur SourceGraphic — this extends the colour+alpha outward over FLOWER_LAYER_BLUR px.
+//   2. Composite the original SourceGraphic OVER the blurred spread — this restores full
+//      opacity in the interior while letting the blurred spread show wherever the original
+//      is transparent (i.e. outside the petal edge), giving a clean outward-only gradient.
+// This avoids the banding that occurred when blurring only SourceAlpha (which reduced
+// interior alpha near edges) and the missing outward effect (SourceGraphic had no pixels
+// outside the path boundary so the blurred alpha mask there was wasted).
 if (FLOWER_LAYER_BLUR > 0) {
     const blur_margin = Math.ceil(FLOWER_LAYER_BLUR * 4);
     const blur_half   = FLOWER_OUTER_BASE_R + blur_margin;
     out.push(`    <filter id="flower_fade" filterUnits="userSpaceOnUse" x="${(200 - blur_half).toFixed(0)}" y="${(200 - blur_half).toFixed(0)}" width="${(blur_half * 2).toFixed(0)}" height="${(blur_half * 2).toFixed(0)}">
-      <feGaussianBlur in="SourceAlpha" stdDeviation="${FLOWER_LAYER_BLUR}" result="soft_alpha"/>
-      <feComposite in="SourceGraphic" in2="soft_alpha" operator="in"/>
+      <feGaussianBlur in="SourceGraphic" stdDeviation="${FLOWER_LAYER_BLUR}" result="spread"/>
+      <feComposite in="SourceGraphic" in2="spread" operator="over"/>
     </filter>`);
 }
 
@@ -632,7 +673,7 @@ out.push(`  <g clip-path="url(#circle_clip)" opacity="${FLOWER_OPACITY}">`);
 ELEM_LAYERS.forEach(({ base_r, lobe_amp, color, rot_steps }, i) => {
     const rotation = BASE_ROTATION_OFFSET + rot_steps * ROTATION_STEP;
     const d = flower_path(200, 200, base_r, lobe_amp, LOBE_COUNT, rotation, 1000);
-    if (FLOWER_LAYER_BLUR > 0 && i > 0) {
+    if (FLOWER_LAYER_BLUR > 0) {
         out.push(`    <path d="${d}" fill="${apply_flower_color(color)}" filter="url(#flower_fade)"/>`);
     } else {
         out.push(`    <path d="${d}" fill="${apply_flower_color(color)}"/>`);
@@ -656,25 +697,29 @@ if (FLOWER_DIMMER > 0) {
 }
 
 // Text — supports multiple lines via \n in --text
-// Alignment: text-anchor="middle" x="200" on every tspan so the SVG renderer centers each
-// line itself — no hardcoded char-width approximation that breaks in PNG rasterizers.
-// Same-length monospace lines share identical left edges. Empty lines use a non-breaking
-// space so their dy still advances the cursor.
+// Column alignment: all tspans use text-anchor="start" at the same x so that character
+// column i on every line maps to the same x coordinate, regardless of per-character
+// rendering differences. text-anchor="middle" is intentionally avoided — it centers each
+// line independently, so lines of different rendered widths shift relative to each other.
+// The block is centered by measuring the widest line's actual advance width via fontkit.
+// Requires the font to be installed in node_modules/@fontsource (run `npm run pull-fonts`).
+// Each tspan uses absolute y (never dy) so vertical positions are font-independent.
+// Empty lines use a non-breaking space so they still occupy vertical space.
 // Rendered in two passes: backing shadow first (black, blurred), glow+color on top.
 {
-    const lines    = TEXT_STRING.split('\n');
-    const line_h   = FONT_SIZE * 1.2 * TEXT_LINE_HEIGHT;
-    const y0       = (200 - (lines.length - 1) * line_h / 2).toFixed(3);
-    const tspans   = lines
+    const lines      = TEXT_STRING.split('\n');
+    const line_h     = measureLineHeight(TEXT_FONT, FONT_SIZE) * TEXT_LINE_HEIGHT;
+    const lineWidths = lines.map(l => l.length === 0 ? 0 : measureTextWidth(l, TEXT_FONT, FONT_SIZE));
+    const blockWidth = Math.max(...lineWidths);
+    const text_x     = (200 - blockWidth / 2).toFixed(3);
+    const tspans  = lines
         .map((l, i) => {
             const content = l.length === 0 ? '&#160;' : l;
-            const pos = i === 0
-                ? `x="200" y="${y0}"`
-                : `x="200" dy="${line_h.toFixed(3)}"`;
-            return `      <tspan ${pos}>${content}</tspan>`;
+            const y_i = (200 + (i - (lines.length - 1) / 2) * line_h).toFixed(3);
+            return `      <tspan dominant-baseline="central" x="${text_x}" y="${y_i}">${content}</tspan>`;
         })
         .join('\n');
-    const text_attrs = `dominant-baseline="central" text-anchor="middle" font-family="'${TEXT_FONT}'" font-size="${FONT_SIZE}" font-weight="500"`;
+    const text_attrs = `dominant-baseline="central" text-anchor="start" font-family="'${TEXT_FONT}'" font-size="${FONT_SIZE}" font-weight="500" style="font-variant-ligatures:none"`;
 
     if (TEXT_BACKING_SPREAD > 0) {
         out.push(`  <g filter="url(#text_backing)" opacity="${TEXT_BACKING_OPACITY}" clip-path="url(#circle_clip)">`);

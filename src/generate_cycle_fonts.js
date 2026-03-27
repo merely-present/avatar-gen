@@ -3,7 +3,6 @@
 
 const fs   = require('fs');
 const path = require('path');
-const os   = require('os');
 const { execSync } = require('child_process');
 const puppeteer = require('puppeteer-core');
 
@@ -22,15 +21,13 @@ if (!CHROMIUM_EXEC) {
 
 function fontStatus() {
     const fontsJsonPath = path.join(__dirname, '..', 'config', 'fonts.json');
-    const userFontsDir  = path.join(os.homedir(), '.local', 'share', 'fonts');
+    const fontsourceDir = path.join(__dirname, '..', 'node_modules', '@fontsource');
     let fonts;
     try { fonts = JSON.parse(fs.readFileSync(fontsJsonPath, 'utf8')); }
     catch { return '  (config/fonts.json not found)'; }
-    let installed = [];
-    try { installed = fs.readdirSync(userFontsDir); } catch {}
     return fonts.map(f => {
         const slug  = f.package.replace('@fontsource/', '');
-        const found = installed.some(file => file.startsWith(slug + '-'));
+        const found = fs.existsSync(path.join(fontsourceDir, slug));
         return `  ${found ? '✓' : '✗'} ${f.name.padEnd(24)} ${found ? 'installed' : 'not installed'}`;
     }).join('\n');
 }
@@ -114,11 +111,15 @@ fs.mkdirSync(batchDir, { recursive: true });
 // Font embedding — reads WOFF2 from ~/.local/share/fonts, returns @font-face
 // CSS for inline embedding in the HTML page Puppeteer renders.
 // ---------------------------------------------------------------------------
-const USER_FONTS_DIR = path.join(os.homedir(), '.local', 'share', 'fonts');
+const FONTSOURCE_DIR = path.join(__dirname, '..', 'node_modules', '@fontsource');
 
 function buildFontFaceCSS(fontFamily, pkgSlug) {
-    let allFiles;
-    try { allFiles = fs.readdirSync(USER_FONTS_DIR); } catch { return null; }
+    const filesDir = path.join(FONTSOURCE_DIR, pkgSlug, 'files');
+    if (!fs.existsSync(path.join(FONTSOURCE_DIR, pkgSlug))) {
+        console.error(`  [error] ${fontFamily}: package ${pkgSlug} not found in node_modules. Run: npm run pull-fonts`);
+        process.exit(1);
+    }
+    const allFiles = fs.readdirSync(filesDir);
     // Prefer latin subset; fall back to any WOFF2 for this package
     let matching = allFiles.filter(f => f.startsWith(pkgSlug + '-latin') && f.endsWith('.woff2'));
     if (matching.length === 0)
@@ -128,7 +129,7 @@ function buildFontFaceCSS(fontFamily, pkgSlug) {
         const m      = file.match(/-(\d+)-(normal|italic)\.woff2$/);
         const weight = m ? m[1] : '400';
         const style  = m ? m[2] : 'normal';
-        const b64    = fs.readFileSync(path.join(USER_FONTS_DIR, file)).toString('base64');
+        const b64    = fs.readFileSync(path.join(filesDir, file)).toString('base64');
         return `@font-face{font-family:'${fontFamily}';src:url('data:font/woff2;base64,${b64}')format('woff2');font-weight:${weight};font-style:${style};}`;
     }).join('');
 }
@@ -182,7 +183,7 @@ console.log(`Generating ${fonts.length} font variants → ${batchDir}`);
         const pkgSlug = font.package.replace('@fontsource/', '');
         const fontCss = buildFontFaceCSS(font.name, pkgSlug);
         if (!fontCss) {
-            console.error(`  [error] ${font.name}: no WOFF2 files found in ${USER_FONTS_DIR}. Run: npm run pull-fonts`);
+            console.error(`  [error] ${font.name}: no WOFF2 files found in ${path.join(FONTSOURCE_DIR, pkgSlug, 'files')}. Run: npm run pull-fonts`);
             process.exit(1);
         }
 
