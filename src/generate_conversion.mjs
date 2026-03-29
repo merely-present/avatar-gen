@@ -25,7 +25,7 @@ if (!CHROMIUM_EXEC) {
     process.exit(1)
 }
 
-const RESOLUTIONS = [200, 400, 600, 800, 1000, 1080, 1200, 1500, 2000, 4000]
+const RESOLUTIONS = [200, 400, 600, 800, 1000, 1080, 1200, 1600, 2000, 4000]
 const RES_STR     = RESOLUTIONS.join('-')
 
 function showHelp() {
@@ -61,15 +61,15 @@ const inputFiles   = []
 let   outputDirOpt = null
 let   fontOverride = null
 
-for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i]
-    if (!arg.startsWith('--')) continue
-    const eqIdx = arg.indexOf('=')
-    const key   = eqIdx >= 0 ? arg.slice(2, eqIdx) : arg.slice(2)
-    const val   = eqIdx >= 0 ? arg.slice(eqIdx + 1) : argv[++i]
-    if      (key === 'input-file') inputFiles.push(resolve(val))
-    else if (key === 'output-dir') outputDirOpt = resolve(val)
-    else if (key === 'text-font')  fontOverride  = val
+for (let argIndex = 0; argIndex < argv.length; argIndex++) {
+    const argToken = argv[argIndex]
+    if (!argToken.startsWith('--')) continue
+    const eqSignIndex = argToken.indexOf('=')
+    const argKey      = eqSignIndex >= 0 ? argToken.slice(2, eqSignIndex) : argToken.slice(2)
+    const argValue    = eqSignIndex >= 0 ? argToken.slice(eqSignIndex + 1) : argv[++argIndex]
+    if      (argKey === 'input-file') inputFiles.push(resolve(argValue))
+    else if (argKey === 'output-dir') outputDirOpt = resolve(argValue)
+    else if (argKey === 'text-font')  fontOverride  = argValue
 }
 
 if (inputFiles.length === 0) {
@@ -80,20 +80,20 @@ if (inputFiles.length === 0) {
 // ---------------------------------------------------------------------------
 // Datetime + timezone (local time, same format as generate_animated_avatar)
 // ---------------------------------------------------------------------------
-const now      = new Date()
-const pad2     = n => String(n).padStart(2, '0')
-const tzOffset = -now.getTimezoneOffset()
-const tzSign   = tzOffset >= 0 ? '+' : '-'
-const tzH      = pad2(Math.floor(Math.abs(tzOffset) / 60))
-const tzM      = pad2(Math.abs(tzOffset) % 60)
+const now       = new Date()
+const padStart2 = n => String(n).padStart(2, '0')
+const tzOffset  = -now.getTimezoneOffset()
+const tzSign    = tzOffset >= 0 ? '+' : '-'
+const tzHours   = padStart2(Math.floor(Math.abs(tzOffset) / 60))
+const tzMinutes = padStart2(Math.abs(tzOffset) % 60)
 const timestamp = [
     now.getFullYear(),
-    '-', pad2(now.getMonth() + 1),
-    '-', pad2(now.getDate()),
-    '_', pad2(now.getHours()),
-    '-', pad2(now.getMinutes()),
-    '-', pad2(now.getSeconds()),
-    '_', tzSign, tzH, tzM,
+    '-', padStart2(now.getMonth() + 1),
+    '-', padStart2(now.getDate()),
+    '_', padStart2(now.getHours()),
+    '-', padStart2(now.getMinutes()),
+    '-', padStart2(now.getSeconds()),
+    '_', tzSign, tzHours, tzMinutes,
 ].join('')
 
 // ---------------------------------------------------------------------------
@@ -110,24 +110,24 @@ function buildFontFaceCSS(family) {
         return null
     }
     const allFiles = readdirSync(filesDir)
-    let matching = allFiles.filter(f => f.startsWith(slug + '-latin') && f.endsWith('.woff2'))
+    let matching = allFiles.filter(fileName => fileName.startsWith(slug + '-latin') && fileName.endsWith('.woff2'))
     if (matching.length === 0)
-        matching = allFiles.filter(f => f.startsWith(slug) && f.endsWith('.woff2'))
+        matching = allFiles.filter(fileName => fileName.startsWith(slug) && fileName.endsWith('.woff2'))
     if (matching.length === 0) return null
-    return matching.map(file => {
-        const m      = file.match(/-(\d+)-(normal|italic)\.woff2$/)
-        const weight = m ? m[1] : '400'
-        const style  = m ? m[2] : 'normal'
-        const b64    = readFileSync(join(filesDir, file)).toString('base64')
-        return `@font-face{font-family:'${family}';src:url('data:font/woff2;base64,${b64}')format('woff2');font-weight:${weight};font-style:${style};}`
+    return matching.map(fileName => {
+        const fileMatch  = fileName.match(/-(\d+)-(normal|italic)\.woff2$/)
+        const weight     = fileMatch ? fileMatch[1] : '400'
+        const fontStyle  = fileMatch ? fileMatch[2] : 'normal'
+        const base64Data = readFileSync(join(filesDir, fileName)).toString('base64')
+        return `@font-face{font-family:'${family}';src:url('data:font/woff2;base64,${base64Data}')format('woff2');font-weight:${weight};font-style:${fontStyle};}`
     }).join('')
 }
 
 // Auto-detect font family embedded in SVG by generate_avatar.js.
 // Looks for: font-family="'Font Name'" or font-family="Font Name"
 function parseFontFromSvg(svgText) {
-    const m = svgText.match(/font-family="'([^']+)'"/) ?? svgText.match(/font-family="([^"]+)"/)
-    return m ? m[1].trim() : null
+    const fontFamilyMatch = svgText.match(/font-family="'([^']+)'"/) ?? svgText.match(/font-family="([^"]+)"/)
+    return fontFamilyMatch ? fontFamilyMatch[1].trim() : null
 }
 
 // ---------------------------------------------------------------------------
@@ -136,16 +136,16 @@ function parseFontFromSvg(svgText) {
 // ---------------------------------------------------------------------------
 console.log(`Converting ${inputFiles.length} file(s)…`)
 
-const svgEntries = inputFiles.map(file => {
-    const svg      = readFileSync(file, 'utf8')
+const svgEntries = inputFiles.map(filePath => {
+    const svg      = readFileSync(filePath, 'utf8')
     const fontName = fontOverride ?? parseFontFromSvg(svg) ?? 'DejaVu Sans Mono'
-    return { file, svg, fontName }
+    return { file: filePath, svg, fontName }
 })
 
-const uniqueFonts = [...new Set(svgEntries.map(e => e.fontName))]
-const combinedCss = uniqueFonts.map(f => {
-    const css = buildFontFaceCSS(f)
-    if (css === null) console.warn(`Warning: font '${f}': no WOFF2 files found in ${join(FONTSOURCE_DIR, f.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''), 'files')}. Run \`npm run pull-fonts\` to install fonts.`)
+const uniqueFonts  = [...new Set(svgEntries.map(entry => entry.fontName))]
+const combinedCss  = uniqueFonts.map(fontName => {
+    const css = buildFontFaceCSS(fontName)
+    if (css === null) console.warn(`Warning: font '${fontName}': no WOFF2 files found in ${join(FONTSOURCE_DIR, fontName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''), 'files')}. Run \`npm run pull-fonts\` to install fonts.`)
     return css ?? ''
 }).join('')
 
@@ -160,44 +160,44 @@ await page.setContent(
 )
 await page.evaluate(() => document.fonts.ready)
 
-const totalSteps = svgEntries.length * RESOLUTIONS.length * 2  // PNG + JPEG per resolution
-let   doneSteps  = 0
-const BAR_WIDTH  = 20
+const totalSteps  = svgEntries.length * RESOLUTIONS.length * 2  // PNG + JPEG per resolution
+let   doneSteps   = 0
+const BAR_WIDTH   = 20
 const BAR_EIGHTHS = [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█']
 
-function printProgress(stem) {
-    const pct      = Math.round(doneSteps / totalSteps * 100)
-    const exact    = doneSteps / totalSteps * BAR_WIDTH   // fractional cells filled
-    const full     = Math.floor(exact)
-    const partial  = Math.floor((exact - full) * 8)       // 0–7 eighths
-    const bar      = '█'.repeat(full) +
-                     (full < BAR_WIDTH ? BAR_EIGHTHS[partial] + ' '.repeat(BAR_WIDTH - full - 1) : '')
+function printProgress(fileStem) {
+    const pct         = Math.round(doneSteps / totalSteps * 100)
+    const filledCells = doneSteps / totalSteps * BAR_WIDTH   // fractional cells filled
+    const fullCells   = Math.floor(filledCells)
+    const partialEighths = Math.floor((filledCells - fullCells) * 8)       // 0–7 eighths
+    const progressBar = '█'.repeat(fullCells) +
+                     (fullCells < BAR_WIDTH ? BAR_EIGHTHS[partialEighths] + ' '.repeat(BAR_WIDTH - fullCells - 1) : '')
     const stepStr = String(doneSteps).padStart(String(totalSteps).length)
-    process.stdout.write(`\r|${bar}| ${stepStr}/${totalSteps} ${pct.toString().padStart(3)}% '${stem}'`)
+    process.stdout.write(`\r|${progressBar}| ${stepStr}/${totalSteps} ${pct.toString().padStart(3)}% '${fileStem}'`)
 }
 
 for (const { file, svg } of svgEntries) {
-    const stem    = basename(file, extname(file))
-    const baseDir = outputDirOpt ?? dirname(file)
-    // Output dir: <baseDir>/<stem>/  (the stem already contains the timestamp)
-    const batchDir = join(baseDir, stem)
+    const fileStem = basename(file, extname(file))
+    const baseDir  = outputDirOpt ?? dirname(file)
+    // Output dir: <baseDir>/<fileStem>/  (the fileStem already contains the timestamp)
+    const batchDir = join(baseDir, fileStem)
     mkdirSync(batchDir, { recursive: true })
 
-    await page.evaluate((s) => { document.body.innerHTML = s }, svg)
+    await page.evaluate((svgContent) => { document.body.innerHTML = svgContent }, svg)
 
-    for (const size of RESOLUTIONS) {
+    for (const renderSize of RESOLUTIONS) {
         // deviceScaleFactor scales the 400×400 CSS viewport to the target pixel size.
-        await page.setViewport({ width: 400, height: 400, deviceScaleFactor: size / 400 })
+        await page.setViewport({ width: 400, height: 400, deviceScaleFactor: renderSize / 400 })
 
         // PNG: transparent background (omitBackground removes Chromium's default white fill).
-        const pngBuf  = await page.screenshot({ omitBackground: true, clip: { x: 0, y: 0, width: 400, height: 400 } })
-        writeFileSync(join(batchDir, `${stem}_${size}x${size}.png`), pngBuf)
-        doneSteps++; printProgress(stem)
+        const pngBuffer = await page.screenshot({ omitBackground: true, clip: { x: 0, y: 0, width: 400, height: 400 } })
+        writeFileSync(join(batchDir, `${fileStem}_${renderSize}x${renderSize}.png`), pngBuffer)
+        doneSteps++; printProgress(fileStem)
 
         // JPEG: white background (Chromium's default white fill; no alpha channel in JPEG).
-        const jpgBuf  = await page.screenshot({ type: 'jpeg', quality: 92, clip: { x: 0, y: 0, width: 400, height: 400 } })
-        writeFileSync(join(batchDir, `${stem}_${size}x${size}.jpg`), jpgBuf)
-        doneSteps++; printProgress(stem)
+        const jpgBuffer = await page.screenshot({ type: 'jpeg', quality: 92, clip: { x: 0, y: 0, width: 400, height: 400 } })
+        writeFileSync(join(batchDir, `${fileStem}_${renderSize}x${renderSize}.jpg`), jpgBuffer)
+        doneSteps++; printProgress(fileStem)
     }
 }
 

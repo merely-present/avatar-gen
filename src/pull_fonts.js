@@ -18,14 +18,14 @@ function showHelp() {
     );
 }
 
-if (process.argv.slice(2).some(a => a === '--help' || a === '-h')) { showHelp(); process.exit(0); }
+if (process.argv.slice(2).some(argToken => argToken === '--help' || argToken === '-h')) { showHelp(); process.exit(0); }
 
 const ROOT  = path.join(__dirname, '..');
 const fonts = JSON.parse(fs.readFileSync(path.join(ROOT, 'config', 'fonts.json'), 'utf8'));
 
 // Separate already-installed from missing
-const missing  = fonts.filter(f => !fs.existsSync(path.join(ROOT, 'node_modules', f.package)));
-const existing = fonts.filter(f =>  fs.existsSync(path.join(ROOT, 'node_modules', f.package)));
+const missing  = fonts.filter(fontEntry => !fs.existsSync(path.join(ROOT, 'node_modules', fontEntry.package)));
+const existing = fonts.filter(fontEntry =>  fs.existsSync(path.join(ROOT, 'node_modules', fontEntry.package)));
 
 for (const font of existing) {
     console.log(`  ${font.name} (${font.package})… already installed, skipping`);
@@ -41,8 +41,8 @@ if (missing.length === 0) {
 // each individually via npm view, then install the valid ones together.
 // Using --save-optional so packages are recorded in optionalDependencies,
 // distinct from actual runtime dependencies.
-const packages = missing.map(f => f.package).join(' ');
-console.log(`  Installing: ${missing.map(f => f.name).join(', ')}…`);
+const packages = missing.map(fontEntry => fontEntry.package).join(' ');
+console.log(`  Installing: ${missing.map(fontEntry => fontEntry.name).join(', ')}…`);
 let batchOk = false;
 try {
     execSync(`npm install --save-optional ${packages}`, { cwd: ROOT, stdio: 'inherit' });

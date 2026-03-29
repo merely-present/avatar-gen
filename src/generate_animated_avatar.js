@@ -50,7 +50,7 @@ const GENERATE_AVATAR = path.join(SCRIPT_DIR, 'generate_avatar.js');
 // Arg parsing — separate animation args from generate_avatar.js passthrough
 // ---------------------------------------------------------------------------
 const MY_KEYS = new Set([
-    'seeds', 'fps', 'time-per-twinkle-ms', 'twinkle-cycles', 'res', 'name', 'output-dir',
+    'seeds', 'fps', 'time-per-twinkle-ms', 'twinkle-cycles', 'res', 'name', 'output-dir', 'flower-seed',
 ]);
 
 if (process.argv.slice(2).some(a => a === '--help' || a === '-h')) { showHelp(); process.exit(0); }
@@ -59,16 +59,16 @@ const argv          = process.argv.slice(2);
 const myOpts        = {};
 const passthroughKV = {};   // key → value (strings)
 
-for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    if (!arg.startsWith('--')) continue;
-    const eqIdx = arg.indexOf('=');
-    const key   = eqIdx >= 0 ? arg.slice(2, eqIdx) : arg.slice(2);
-    const val   = eqIdx >= 0 ? arg.slice(eqIdx + 1) : argv[++i];
-    if (MY_KEYS.has(key)) {
-        myOpts[key] = val;
+for (let argIndex = 0; argIndex < argv.length; argIndex++) {
+    const argToken = argv[argIndex];
+    if (!argToken.startsWith('--')) continue;
+    const eqSignIndex = argToken.indexOf('=');
+    const argKey      = eqSignIndex >= 0 ? argToken.slice(2, eqSignIndex) : argToken.slice(2);
+    const argValue    = eqSignIndex >= 0 ? argToken.slice(eqSignIndex + 1) : argv[++argIndex];
+    if (MY_KEYS.has(argKey)) {
+        myOpts[argKey] = argValue;
     } else {
-        passthroughKV[key] = val;
+        passthroughKV[argKey] = argValue;
     }
 }
 
@@ -84,11 +84,11 @@ const name          = myOpts.name || 'generated_animation';
 const timeParts = (myOpts['time-per-twinkle-ms'] || '1000').split(',').map(Number);
 let holdLowMs, riseMs, holdHighMs, fallMs;
 if (timeParts.length === 1) {
-    const half  = timeParts[0] / 2;
+    const halfCycleDuration = timeParts[0] / 2;
     holdLowMs   = 0;
-    riseMs      = half;
+    riseMs      = halfCycleDuration;
     holdHighMs  = 0;
-    fallMs      = half;
+    fallMs      = halfCycleDuration;
 } else if (timeParts.length === 4) {
     [riseMs, holdHighMs, fallMs, holdLowMs] = timeParts;
 } else {
@@ -108,9 +108,9 @@ function mulberry32(seed) {
     return function () {
         seed |= 0;
         seed = seed + 0x6D2B79F5 | 0;
-        let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
-        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-        return ((t ^ t >>> 14) >>> 0);
+        let hashState = Math.imul(seed ^ seed >>> 15, 1 | seed);
+        hashState = hashState + Math.imul(hashState ^ hashState >>> 7, 61 | hashState) ^ hashState;
+        return ((hashState ^ hashState >>> 14) >>> 0);
     };
 }
 
@@ -136,17 +136,23 @@ delete passthroughKV['seed'];
 delete passthroughKV['output'];
 delete passthroughKV['output-dir'];
 
+// flower-seed: fixed across all frames so the flower shape doesn't change between cycles.
+// Defaults to the first seed; can be overridden explicitly with --flower-seed.
+const flowerSeed = myOpts['flower-seed'] !== undefined
+    ? parseInt(myOpts['flower-seed'], 10)
+    : seeds[0];
+
 // ---------------------------------------------------------------------------
 // Interpolation targets
 // ---------------------------------------------------------------------------
-const nodeRadius          = parseFloat(passthroughKV['polygon-node-radius'] || '1');
-const nodeGlow            = parseFloat(passthroughKV['polygon-node-glow'] || '3');
-const targetTwinkleRadius = passthroughKV['polygon-node-twinkle-radius'] !== undefined
-    ? parseFloat(passthroughKV['polygon-node-twinkle-radius'])
-    : nodeRadius;
-const targetGlowTwinkle   = parseFloat(passthroughKV['polygon-node-glow-twinkle'] || '6');
-const targetTwinkleStrength = passthroughKV['polygon-node-twinkle-strength'] !== undefined
-    ? parseFloat(passthroughKV['polygon-node-twinkle-strength'])
+const nodeRadius          = parseFloat(passthroughKV['polygon-node-radius'] || '2');
+const nodeGlow            = parseFloat(passthroughKV['polygon-node-glow'] || '4');
+const nodeFade            = parseFloat(passthroughKV['polygon-node-fade'] || '1');
+const targetTwinkleRadius = parseFloat(passthroughKV['polygon-node-twinkle-radius'] || '3');
+const targetTwinkleGlow   = parseFloat(passthroughKV['polygon-node-twinkle-glow'] || '6');
+const targetTwinkleFade   = parseFloat(passthroughKV['polygon-node-twinkle-fade'] || '2');
+const targetTwinkleStrength = passthroughKV['twinkle-strength'] !== undefined
+    ? parseFloat(passthroughKV['twinkle-strength'])
     : 1;
 
 // ---------------------------------------------------------------------------
@@ -157,18 +163,18 @@ const totalFrames     = Math.max(1, Math.round(totalDurationMs * fps / 1000));
 const msPerFrame      = 1000 / fps;
 
 function interpolationFactor(timeInCycleMs) {
-    let t = timeInCycleMs;
-    if (t < riseMs) return riseMs > 0 ? t / riseMs : 1;
-    t -= riseMs;
-    if (t < holdHighMs) return 1;
-    t -= holdHighMs;
-    if (t < fallMs) return fallMs > 0 ? 1 - t / fallMs : 0;
-    t -= fallMs;
-    if (t < holdLowMs) return 0;
+    let timeRemaining = timeInCycleMs;
+    if (timeRemaining < riseMs) return riseMs > 0 ? timeRemaining / riseMs : 1;
+    timeRemaining -= riseMs;
+    if (timeRemaining < holdHighMs) return 1;
+    timeRemaining -= holdHighMs;
+    if (timeRemaining < fallMs) return fallMs > 0 ? 1 - timeRemaining / fallMs : 0;
+    timeRemaining -= fallMs;
+    if (timeRemaining < holdLowMs) return 0;
     return 0;
 }
 
-function lerp(a, b, t) { return a + (b - a) * t; }
+function lerp(start, end, factor) { return start + (end - start) * factor; }
 
 // ---------------------------------------------------------------------------
 // Output paths  (computed here so framesDir can mirror the gif's name)
@@ -177,20 +183,20 @@ const outputDir = myOpts['output-dir']
     ? path.resolve(myOpts['output-dir'])
     : process.cwd();
 
-const now      = new Date();
-const pad2     = n => String(n).padStart(2, '0');
-const tzOffset = -now.getTimezoneOffset();
-const tzSign   = tzOffset >= 0 ? '+' : '-';
-const tzH      = pad2(Math.floor(Math.abs(tzOffset) / 60));
-const tzM      = pad2(Math.abs(tzOffset) % 60);
+const now       = new Date();
+const padStart2 = n => String(n).padStart(2, '0');
+const tzOffset  = -now.getTimezoneOffset();
+const tzSign    = tzOffset >= 0 ? '+' : '-';
+const tzHours   = padStart2(Math.floor(Math.abs(tzOffset) / 60));
+const tzMinutes = padStart2(Math.abs(tzOffset) % 60);
 const timestamp = [
     now.getFullYear(),
-    '-', pad2(now.getMonth() + 1),
-    '-', pad2(now.getDate()),
-    '_', pad2(now.getHours()),
-    '-', pad2(now.getMinutes()),
-    '-', pad2(now.getSeconds()),
-    '_', tzSign, tzH, tzM,
+    '-', padStart2(now.getMonth() + 1),
+    '-', padStart2(now.getDate()),
+    '_', padStart2(now.getHours()),
+    '-', padStart2(now.getMinutes()),
+    '-', padStart2(now.getSeconds()),
+    '_', tzSign, tzHours, tzMinutes,
 ].join('');
 
 const twinkleTimesStr = `twinkle_times_${timeParts.join('_')}`;
@@ -211,12 +217,15 @@ fs.mkdirSync(framesDir, { recursive: true });
 // Build CLI args array for generate_avatar.js
 // ---------------------------------------------------------------------------
 function buildCli(overrides) {
-    const merged = { ...passthroughKV, ...overrides };
-    const parts  = [];
-    for (const [k, v] of Object.entries(merged)) {
-        parts.push(`--${k}`, String(v));
+    const mergedArgs = { ...passthroughKV, ...overrides };
+    const argParts   = [];
+    for (const [argKey, argValue] of Object.entries(mergedArgs)) {
+        const val = String(argValue);
+        // Use --key=value when value starts with '-' to avoid parseArgs ambiguity
+        if (val.startsWith('-')) argParts.push(`--${argKey}=${val}`);
+        else argParts.push(`--${argKey}`, val);
     }
-    return parts;
+    return argParts;
 }
 
 // ---------------------------------------------------------------------------
@@ -241,24 +250,25 @@ function buildFontFaceCSS(fontFamily) {
         process.exit(1);
     }
     const allFiles = fs.readdirSync(filesDir);
-    let matching = allFiles.filter(f => f.startsWith(slug + '-latin') && f.endsWith('.woff2'));
+    let matching = allFiles.filter(fileName => fileName.startsWith(slug + '-latin') && fileName.endsWith('.woff2'));
     if (matching.length === 0)
-        matching = allFiles.filter(f => f.startsWith(slug) && f.endsWith('.woff2'));
+        matching = allFiles.filter(fileName => fileName.startsWith(slug) && fileName.endsWith('.woff2'));
     if (matching.length === 0) return null;
-    return matching.map(file => {
-        const m      = file.match(/-(\d+)-(normal|italic)\.woff2$/);
-        const weight = m ? m[1] : '400';
-        const style  = m ? m[2] : 'normal';
-        const b64    = fs.readFileSync(path.join(filesDir, file)).toString('base64');
-        return `@font-face{font-family:'${fontFamily}';src:url('data:font/woff2;base64,${b64}')format('woff2');font-weight:${weight};font-style:${style};}`;
+    return matching.map(fileName => {
+        const fileMatch  = fileName.match(/-(\d+)-(normal|italic)\.woff2$/);
+        const weight     = fileMatch ? fileMatch[1] : '400';
+        const fontStyle  = fileMatch ? fileMatch[2] : 'normal';
+        const base64Data = fs.readFileSync(path.join(filesDir, fileName)).toString('base64');
+        return `@font-face{font-family:'${fontFamily}';src:url('data:font/woff2;base64,${base64Data}')format('woff2');font-weight:${weight};font-style:${fontStyle};}`;
     }).join('');
 }
 
 (async () => {
-    const fontName = passthroughKV['text-font'] || 'DejaVu Sans Mono';
-    const fontCss  = buildFontFaceCSS(fontName);
+    const fontName    = passthroughKV['text-font'] || 'DejaVu Sans Mono';
+    const fontCss     = buildFontFaceCSS(fontName);
     if (fontCss === null) {
-        console.error(`Error: font '${fontName}': no WOFF2 files found in ${path.join(FONTSOURCE_DIR, fontName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''), 'files')}.\nRun \`npm run pull-fonts\` to install fonts.`);
+        const fontSlug = fontName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+        console.error(`Error: font '${fontName}': no WOFF2 files found in ${path.join(FONTSOURCE_DIR, fontSlug, 'files')}.\nRun \`npm run pull-fonts\` to install fonts.`);
         process.exit(1);
     }
 
@@ -275,12 +285,12 @@ function buildFontFaceCSS(fontFamily) {
     const pngPaths = [];
 
     const BAR_EIGHTHS = [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
-    function makeBar(fraction, width) {
-        const exact   = Math.min(1, Math.max(0, fraction)) * width;
-        const full    = Math.floor(exact);
-        const partial = Math.floor((exact - full) * 8);
-        return '█'.repeat(full) +
-               (full < width ? BAR_EIGHTHS[partial] + ' '.repeat(width - full - 1) : '');
+    function makeBar(fraction, barWidth) {
+        const filledCells    = Math.min(1, Math.max(0, fraction)) * barWidth;
+        const fullCells      = Math.floor(filledCells);
+        const partialEighths = Math.floor((filledCells - fullCells) * 8);
+        return '█'.repeat(fullCells) +
+               (fullCells < barWidth ? BAR_EIGHTHS[partialEighths] + ' '.repeat(barWidth - fullCells - 1) : '');
     }
 
     for (let frame = 0; frame < totalFrames; frame++) {
@@ -290,25 +300,28 @@ function buildFontFaceCSS(fontFamily) {
         const factor      = interpolationFactor(timeInCycle);
 
         const curTwinkleRadius   = lerp(nodeRadius, targetTwinkleRadius, factor);
-        const curGlowTwinkle     = lerp(nodeGlow, targetGlowTwinkle, factor);
+        const curTwinkleGlow     = lerp(nodeGlow, targetTwinkleGlow, factor);
+        const curTwinkleFade     = lerp(nodeFade, targetTwinkleFade, factor);
         const curTwinkleStrength = lerp(0, targetTwinkleStrength, factor);
 
         const svgPath = path.join(framesDir, `frame_${String(frame).padStart(4, '0')}.svg`);
 
         const cliArgs = buildCli({
             'polygon-node-twinkle-radius':   curTwinkleRadius.toFixed(4),
-            'polygon-node-glow-twinkle':     curGlowTwinkle.toFixed(4),
-            'polygon-node-twinkle-strength': curTwinkleStrength.toFixed(4),
-            'seed':                        seeds[cycleIndex],
-            'output':                      svgPath,
+            'polygon-node-twinkle-glow':     curTwinkleGlow.toFixed(4),
+            'polygon-node-twinkle-fade':     curTwinkleFade.toFixed(4),
+            'twinkle-strength':              curTwinkleStrength.toFixed(4),
+            'seed':                          seeds[cycleIndex],
+            'flower-seed':                   flowerSeed,
+            'output':                        svgPath,
         });
 
-        const escaped = cliArgs.map(a => {
-            if (/^[a-zA-Z0-9_.\/=:+-]+$/.test(a)) return a;
-            return "'" + a.replace(/'/g, "'\\''") + "'";
+        const escapedArgs = cliArgs.map(argToken => {
+            if (/^[a-zA-Z0-9_.\/:=+-]+$/.test(argToken)) return argToken;
+            return "'" + argToken.replace(/'/g, "'\\''" ) + "'";
         });
 
-        execSync(`node ${JSON.stringify(GENERATE_AVATAR)} ${escaped.join(' ')}`, {
+        execSync(`node ${JSON.stringify(GENERATE_AVATAR)} ${escapedArgs.join(' ')}`, {
             cwd:   SCRIPT_DIR,
             stdio: ['pipe', 'pipe', 'pipe'],
         });
@@ -325,11 +338,11 @@ function buildFontFaceCSS(fontFamily) {
         fs.writeFileSync(pngPath, png);
         pngPaths.push(pngPath);
 
-        const frameBar  = makeBar((frame + 1) / totalFrames, 20);
-        const factorBar = makeBar(factor, 20);
+        const frameProgressBar = makeBar((frame + 1) / totalFrames, 20);
+        const factorBar        = makeBar(factor, 20);
         process.stdout.write(
             `\r  Frame ${String(frame + 1).padStart(String(totalFrames).length)}/${totalFrames}` +
-            `  |\x1b[93m${frameBar}\x1b[0m|` +
+            `  |\x1b[93m${frameProgressBar}\x1b[0m|` +
             `  cycle ${cycleIndex + 1}/${twinkleCycles}` +
             `  factor ${factor.toFixed(3)}  |\x1b[94m${factorBar}\x1b[0m|`
         );
@@ -341,21 +354,21 @@ function buildFontFaceCSS(fontFamily) {
     // ---------------------------------------------------------------------------
     // Assemble GIF
     // ---------------------------------------------------------------------------
-    const delay = Math.round(100 / fps);   // centiseconds per frame
+    const frameDelayCs = Math.round(100 / fps);   // centiseconds per frame
 
     console.log('Assembling GIF…');
     // Threshold alpha at 50% so anti-aliased circle edges become cleanly
     // opaque or transparent (GIF only supports binary transparency).
     execSync(
         `magick convert ` +
-        `-delay ${delay} -loop 0 -dispose Background ` +
-        pngPaths.map(p => `\\( ${JSON.stringify(p)} -channel A -threshold 50% +channel \\)`).join(' ') +
+        `-delay ${frameDelayCs} -loop 0 -dispose Background ` +
+        pngPaths.map(pngPath => `\\( ${JSON.stringify(pngPath)} -channel A -threshold 50% +channel \\)`).join(' ') +
         ' -layers Optimize ' + JSON.stringify(gifPath),
         { stdio: 'inherit', timeout: 3000000 },
     );
 
     // Clean up intermediate PNGs
-    for (const p of pngPaths) fs.unlinkSync(p);
+    for (const pngPath of pngPaths) fs.unlinkSync(pngPath);
 
     // Write animation parameters alongside the GIF
     const _animParams = {

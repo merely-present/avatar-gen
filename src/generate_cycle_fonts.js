@@ -67,16 +67,16 @@ const argv    = process.argv.slice(2);
 const myOpts  = {};
 const passthroughKV = {};
 
-for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    if (!arg.startsWith('--')) continue;
-    const eqIdx = arg.indexOf('=');
-    const key   = eqIdx >= 0 ? arg.slice(2, eqIdx) : arg.slice(2);
-    const val   = eqIdx >= 0 ? arg.slice(eqIdx + 1) : argv[++i];
-    if (MY_KEYS.has(key)) {
-        myOpts[key] = val;
-    } else if (key !== 'text-font') {  // we control --text-font
-        passthroughKV[key] = val;
+for (let argIndex = 0; argIndex < argv.length; argIndex++) {
+    const argToken = argv[argIndex];
+    if (!argToken.startsWith('--')) continue;
+    const eqSignIndex = argToken.indexOf('=');
+    const argKey      = eqSignIndex >= 0 ? argToken.slice(2, eqSignIndex) : argToken.slice(2);
+    const argValue    = eqSignIndex >= 0 ? argToken.slice(eqSignIndex + 1) : argv[++argIndex];
+    if (MY_KEYS.has(argKey)) {
+        myOpts[argKey] = argValue;
+    } else if (argKey !== 'text-font') {  // we control --text-font
+        passthroughKV[argKey] = argValue;
     }
 }
 
@@ -88,20 +88,20 @@ const outputDir = myOpts['output-dir']
 // ---------------------------------------------------------------------------
 // Batch output dir
 // ---------------------------------------------------------------------------
-const now      = new Date();
-const pad2     = n => String(n).padStart(2, '0');
-const tzOffset = -now.getTimezoneOffset();
-const tzSign   = tzOffset >= 0 ? '+' : '-';
-const tzH      = pad2(Math.floor(Math.abs(tzOffset) / 60));
-const tzM      = pad2(Math.abs(tzOffset) % 60);
+const now       = new Date();
+const padStart2 = n => String(n).padStart(2, '0');
+const tzOffset  = -now.getTimezoneOffset();
+const tzSign    = tzOffset >= 0 ? '+' : '-';
+const tzHours   = padStart2(Math.floor(Math.abs(tzOffset) / 60));
+const tzMinutes = padStart2(Math.abs(tzOffset) % 60);
 const timestamp = [
     now.getFullYear(),
-    '-', pad2(now.getMonth() + 1),
-    '-', pad2(now.getDate()),
-    '_', pad2(now.getHours()),
-    '-', pad2(now.getMinutes()),
-    '-', pad2(now.getSeconds()),
-    '_', tzSign, tzH, tzM,
+    '-', padStart2(now.getMonth() + 1),
+    '-', padStart2(now.getDate()),
+    '_', padStart2(now.getHours()),
+    '-', padStart2(now.getMinutes()),
+    '-', padStart2(now.getSeconds()),
+    '_', tzSign, tzHours, tzMinutes,
 ].join('');
 
 const batchDir = path.join(outputDir, `font_cycle_${timestamp}`);
@@ -121,16 +121,16 @@ function buildFontFaceCSS(fontFamily, pkgSlug) {
     }
     const allFiles = fs.readdirSync(filesDir);
     // Prefer latin subset; fall back to any WOFF2 for this package
-    let matching = allFiles.filter(f => f.startsWith(pkgSlug + '-latin') && f.endsWith('.woff2'));
+    let matching = allFiles.filter(fileName => fileName.startsWith(pkgSlug + '-latin') && fileName.endsWith('.woff2'));
     if (matching.length === 0)
-        matching = allFiles.filter(f => f.startsWith(pkgSlug) && f.endsWith('.woff2'));
+        matching = allFiles.filter(fileName => fileName.startsWith(pkgSlug) && fileName.endsWith('.woff2'));
     if (matching.length === 0) return null;
-    return matching.map(file => {
-        const m      = file.match(/-(\d+)-(normal|italic)\.woff2$/);
-        const weight = m ? m[1] : '400';
-        const style  = m ? m[2] : 'normal';
-        const b64    = fs.readFileSync(path.join(filesDir, file)).toString('base64');
-        return `@font-face{font-family:'${fontFamily}';src:url('data:font/woff2;base64,${b64}')format('woff2');font-weight:${weight};font-style:${style};}`;
+    return matching.map(fileName => {
+        const fileMatch  = fileName.match(/-(\d+)-(normal|italic)\.woff2$/);
+        const weight     = fileMatch ? fileMatch[1] : '400';
+        const fontStyle  = fileMatch ? fileMatch[2] : 'normal';
+        const base64Data = fs.readFileSync(path.join(filesDir, fileName)).toString('base64');
+        return `@font-face{font-family:'${fontFamily}';src:url('data:font/woff2;base64,${base64Data}')format('woff2');font-weight:${weight};font-style:${fontStyle};}`;
     }).join('');
 }
 
@@ -138,12 +138,15 @@ function buildFontFaceCSS(fontFamily, pkgSlug) {
 // Build CLI args
 // ---------------------------------------------------------------------------
 function buildCli(overrides) {
-    const merged = { ...passthroughKV, ...overrides };
-    const parts  = [];
-    for (const [k, v] of Object.entries(merged)) {
-        parts.push(`--${k}`, String(v));
+    const mergedArgs = { ...passthroughKV, ...overrides };
+    const argParts   = [];
+    for (const [argKey, argValue] of Object.entries(mergedArgs)) {
+        const val = String(argValue);
+        // Use --key=value when value starts with '-' to avoid parseArgs ambiguity
+        if (val.startsWith('-')) argParts.push(`--${argKey}=${val}`);
+        else argParts.push(`--${argKey}`, val);
     }
-    return parts;
+    return argParts;
 }
 
 function shellEscape(a) {
@@ -167,11 +170,11 @@ console.log(`Generating ${fonts.length} font variants → ${batchDir}`);
         const svgPath = path.join(batchDir, `${slug}.svg`);
         const pngPath = path.join(batchDir, `${slug}.png`);
 
-        const cliArgs = buildCli({ 'text-font': font.name, 'output': svgPath });
-        const escaped = cliArgs.map(shellEscape);
+        const cliArgs    = buildCli({ 'text-font': font.name, 'output': svgPath });
+        const escapedArgs = cliArgs.map(shellEscape);
 
         try {
-            execSync(`node ${JSON.stringify(GENERATE_AVATAR)} ${escaped.join(' ')}`, {
+            execSync(`node ${JSON.stringify(GENERATE_AVATAR)} ${escapedArgs.join(' ')}`, {
                 cwd:   __dirname,
                 stdio: ['pipe', 'pipe', 'pipe'],
             });
@@ -193,11 +196,11 @@ console.log(`Generating ${fonts.length} font variants → ${batchDir}`);
             `<body>${svgContent}</body></html>`
         );
         await page.evaluate(() => document.fonts.ready);
-        const png = await page.screenshot({
+        const pngBuffer = await page.screenshot({
             omitBackground: true,
             clip: { x: 0, y: 0, width: 400, height: 400 },
         });
-        fs.writeFileSync(pngPath, png);
+        fs.writeFileSync(pngPath, pngBuffer);
 
         console.log(`  ${font.name} → ${slug}.png`);
     }
