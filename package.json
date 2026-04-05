@@ -1,17 +1,20 @@
 {
   "scripts": {
-    "generate": "node src/generate_avatar.js",
-    "generate-animated": "node src/generate_animated_avatar.js",
-    "convert": "node src/generate_conversion.mjs",
-    "generate-cycle-fonts": "node src/generate_cycle_fonts.js",
+    "generate": "node src/generate-avatar.js",
+    "generate-animated": "node src/generate-animated-avatar.js",
+    "convert": "node src/generate-conversion.js",
+    "generate-cycle-fonts": "node src/generate-cycle-fonts.js",
     "add-completions": "mkdir -p ~/.bashrc.d && npm completion > ~/.bashrc.d/node-js-completions",
-    "pull-fonts": "node src/pull_fonts.js"
+    "pull-fonts": "node src/pull-fonts.js",
+    "generate-schemas": "node src/generate-schemas.js",
+    "modify-templates": "node src/modify-templates.js"
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
     "fontkit": "^2.0.4",
     "puppeteer-core": "^24.40.0",
-    "sharp": "^0.33.5"
+    "sharp": "^0.33.5",
+    "zod": "^4.3.6"
   },
   "optionalDependencies": {
     "@fontsource/bytesized": "^5.2.4",

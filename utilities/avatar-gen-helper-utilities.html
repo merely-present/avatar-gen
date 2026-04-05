@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AGHU: Curve Editor</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: "Monaco", "Courier New", monospace;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 20px;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+.container { max-width: 1100px; margin: 0 auto; }
+
+.site-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #9a9a9a;
+  margin-bottom: 20px;
+}
+
+.tab-bar {
+  display: flex;
+  border-bottom: 1px solid #3e3e3e;
+  margin-bottom: 28px;
+}
+
+.tab-btn {
+  background: transparent;
+  color: #9a9a9a;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 8px 20px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  margin-bottom: -1px;
+  transition: color 0.12s;
+}
+.tab-btn:hover { color: #ccc; }
+.tab-btn.active { color: #0f0; border-bottom-color: #0f0; }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.section { margin-bottom: 28px; }
+
+.section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #9a9a9a;
+  margin-bottom: 10px;
+  display: block;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+textarea {
+  width: 100%;
+  height: 180px;
+  background: #252526;
+  border: 1px solid #3a3a3a;
+  color: #0f0;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 10px 12px;
+  resize: vertical;
+  border-radius: 2px;
+  line-height: 1.7;
+}
+textarea:focus { outline: none; border-color: #0f0; box-shadow: 0 0 8px rgba(0,255,0,0.07); }
+textarea[readonly] { color: #0a0; }
+
+.btn-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+button {
+  background: transparent;
+  color: #0f0;
+  border: 1px solid #454545;
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  border-radius: 2px;
+  font-family: inherit;
+  transition: all 0.12s;
+}
+button:hover { border-color: #0f0; background: rgba(0,255,0,0.07); }
+button:active { transform: scale(0.97); }
+button.active-mode { background: #0f0; color: #000; border-color: #0f0; }
+
+input[type="number"], select {
+  background: #2d2d2d;
+  border: 1px solid #3a3a3a;
+  color: #0f0;
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  border-radius: 5px;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"]:focus, select:focus { outline: none; border-color: #0f0; }
+
+label { font-size: 11px; color: #9a9a9a; }
+.control-group { display: flex; flex-direction: column; gap: 5px; }
+
+/* ── Curve Editor ── */
+.curve-cfg {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.cfg-row {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.cfg-row-label {
+  font-size: 11px;
+  color: #9a9a9a;
+  letter-spacing: 0.5px;
+  min-width: 80px;
+}
+.curve-cfg label { display: flex; align-items: center; gap: 6px; }
+.curve-cfg input[type="number"] { width: 70px; }
+
+#cc {
+  display: block;
+  width: 100%;
+  height: 260px;
+  background: #1a1a1a;
+  border: 1px solid #3a3a3a;
+  border-radius: 2px;
+  cursor: crosshair;
+  margin-bottom: 12px;
+}
+
+.mode-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+
+#knob-inputs {
+  position: relative;
+  height: 30px;
+  margin-bottom: 14px;
+}
+#knob-inputs input {
+  position: absolute;
+  width: 66px;
+  transform: translateX(-50%);
+  font-size: 11px;
+  padding: 3px 5px;
+  text-align: center;
+  border-radius: 4px;
+}
+
+#bez-handle-controls {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  margin-top: -6px;
+  flex-wrap: wrap;
+}
+#bez-handle-controls.visible { display: flex; }
+
+.bez-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #252526;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+  padding: 5px 10px;
+  flex: 1;
+  min-width: 0;
+}
+.bez-ctrl-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #9a9a9a;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.bez-ctrl-fields {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.bez-ctrl-fields label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #9a9a9a;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.bez-ctrl-fields input {
+  width: 62px;
+  font-size: 11px;
+  padding: 3px 5px;
+  border-radius: 4px;
+  text-align: left;
+}
+.bez-ctrl-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.bez-ctrl-actions button {
+  padding: 3px 7px;
+  font-size: 11px;
+  letter-spacing: 0;
+  border-radius: 4px;
+}
+.bez-ctrl-sep {
+  color: #3e3e3e;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.prec-btn {
+  padding: 4px 9px;
+  border-radius: 100px;
+  font-size: 10px;
+  letter-spacing: 0;
+}
+
+/* ── OKLCH ── */
+.transformer {
+  background: #252526;
+  border: 1px solid #3a3a3a;
+  padding: 16px;
+  border-radius: 2px;
+  margin-bottom: 20px;
+}
+
+.slider-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.slider-row input[type="range"] { flex: 1; min-width: 80px; }
+.slider-row input[type="number"] { flex: 0 0 90px; text-align: left; }
+.slider-row label { flex: 0 0 60px; }
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: #3e3e3e;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: #0f0;
+  cursor: pointer;
+  box-shadow: 0 0 5px rgba(0,255,0,0.25);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: #0f0;
+  border: none;
+  cursor: pointer;
+}
+
+.range-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.color-preview {
+  width: 100%;
+  height: 30px;
+  border-radius: 2px;
+  border: 1px solid #3a3a3a;
+  margin-top: 12px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="site-title">Avatar Gen Helper Utilities</div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tbtn-curve" onclick="showTab('curve', this)">Curve Editor</button>
+    <button class="tab-btn" id="tbtn-oklch" onclick="showTab('oklch', this)">OKLCH Batch</button>
+  </div>
+
+  <!-- ══════ CURVE EDITOR ══════ -->
+  <div id="tab-curve" class="tab-panel active">
+
+    <div class="curve-cfg">
+      <div class="cfg-row">
+        <label>points <input type="number" id="cfg-n" min="2" max="32" value="6" step="1"></label>
+        <label>min <input type="number" id="cfg-min" value="0" step="any"></label>
+        <label>max <input type="number" id="cfg-max" value="0.1" step="any"></label>
+        <label>dec <input type="number" id="cfg-dec" min="0" max="8" step="1" placeholder="auto" style="width:58px"></label>
+      </div>
+      <div class="cfg-row">
+        <span class="cfg-row-label">snap range</span>
+        <button class="prec-btn" onclick="snapRange(0)">0</button>
+        <button class="prec-btn" onclick="snapRange(1)">0.0</button>
+        <button class="prec-btn" onclick="snapRange(2)">0.00</button>
+        <button class="prec-btn" onclick="snapRange(3)">0.000</button>
+      </div>
+    </div>
+
+    <canvas id="cc"></canvas>
+    <div id="knob-inputs"></div>
+    <div id="bez-handle-controls">
+      <div class="bez-ctrl" id="bez-ctrl-h1">
+        <span class="bez-ctrl-title">← h1</span>
+        <div class="bez-ctrl-fields">
+          <label>x <input type="number" id="bh1-x" step="0.01"></label>
+          <label>y <input type="number" id="bh1-y" step="any"></label>
+        </div>
+        <div class="bez-ctrl-actions">
+          <button onclick="bezFlip('h1','h')" title="Flip horizontally around start point">↔</button>
+          <button onclick="bezFlip('h1','v')" title="Flip vertically around start point">↕</button>
+          <button onclick="bezReset('h1')" title="Reset to default">↺</button>
+        </div>
+      </div>
+      <span class="bez-ctrl-sep">|</span>
+      <div class="bez-ctrl" id="bez-ctrl-h2">
+        <span class="bez-ctrl-title">h2 →</span>
+        <div class="bez-ctrl-fields">
+          <label>x <input type="number" id="bh2-x" step="0.01"></label>
+          <label>y <input type="number" id="bh2-y" step="any"></label>
+        </div>
+        <div class="bez-ctrl-actions">
+          <button onclick="bezFlip('h2','h')" title="Flip horizontally around end point">↔</button>
+          <button onclick="bezFlip('h2','v')" title="Flip vertically around end point">↕</button>
+          <button onclick="bezReset('h2')" title="Reset to default">↺</button>
+        </div>
+      </div>
+      <span class="bez-ctrl-sep">|</span>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <label style="white-space:nowrap">fine <input type="number" id="bez-sec-t" value="0.1" min="0.01" max="0.99" step="0.01" style="width:58px" oninput="setBezSecT(this.value)"></label>
+      </div>
+    </div>
+
+    <div class="mode-row">
+      <button class="active-mode" id="mode-free"   onclick="setMode('free')">free</button>
+      <button id="mode-flat"   onclick="setMode('flat')">flat</button>
+      <button id="mode-ramp"   onclick="setMode('ramp')">ramp</button>
+      <button id="mode-bell"   onclick="setMode('bell')">bell</button>
+      <button id="mode-valley" onclick="setMode('valley')">valley</button>
+      <button id="mode-bezier" onclick="setMode('bezier')">bezier ends</button>
+    </div>
+
+    <div class="two-col">
+      <div>
+        <span class="section-label">Input</span>
+        <textarea id="curve-in" placeholder="Paste numbers here...&#10;&#10;    4,&#10;    4.25,&#10;    4.5,&#10;    4.75,&#10;    5"></textarea>
+      </div>
+      <div>
+        <span class="section-label">Output</span>
+        <textarea id="curve-out" readonly></textarea>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button onclick="loadCurveInput()">load input</button>
+      <button onclick="copyCurveOut()">copy output</button>
+    </div>
+
+  </div><!-- /tab-curve -->
+
+  <!-- ══════ OKLCH BATCH ══════ -->
+  <div id="tab-oklch" class="tab-panel">
+
+    <div class="section">
+      <span class="section-label">Paste &amp; Modify</span>
+      <div class="two-col">
+        <textarea id="oklch-in" placeholder="Paste oklch() values here..."></textarea>
+        <textarea id="oklch-out" readonly placeholder="Output appears here"></textarea>
+      </div>
+      <div class="btn-row">
+        <button onclick="copyEl('oklch-out')">copy output</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <span class="section-label">Transform</span>
+      <div class="control-group" style="max-width:260px;margin-bottom:14px">
+        <label>Modify Property</label>
+        <select id="ok-prop" onchange="updateTransformer()">
+          <option value="hue">Hue (degrees)</option>
+          <option value="chroma">Chroma (0–0.5)</option>
+          <option value="lightness">Lightness (0–1)</option>
+        </select>
+      </div>
+      <div class="transformer">
+        <div class="control-group" style="max-width:260px;margin-bottom:14px">
+          <label>Mode</label>
+          <select id="ok-mode" onchange="updateTransformer()">
+            <option value="offset">Offset all values</option>
+            <option value="remap">Remap start→end</option>
+            <option value="ease">Ease curve</option>
+          </select>
+        </div>
+        <div id="ok-controls"></div>
+        <div id="ok-preview" class="color-preview"></div>
+      </div>
+    </div>
+
+  </div><!-- /tab-oklch -->
+
+</div><!-- /container -->
+
+<script>
+// ─── Tabs ─────────────────────────────────────────────────
+const TAB_META = {
+  curve: { hash: 'curve-editor',  title: 'Curve Editor — AGHU' },
+  oklch: { hash: 'oklch-batch',   title: 'OKLCH Batch — AGHU'  },
+};
+
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  const meta = TAB_META[name];
+  document.title = meta.title;
+  history.replaceState(null, '', '#' + meta.hash);
+  if (name === 'curve') requestAnimationFrame(() => { syncCC(); drawCurve(); });
+}
+
+// Hash-based routing on load
+(function initFromHash() {
+  const hash = window.location.hash.slice(1);
+  const byHash = Object.entries(TAB_META).find(([_, m]) => m.hash === hash);
+  if (byHash) {
+    const [name] = byHash;
+    const btn = document.querySelector(`[onclick*="showTab('${name}'"]`);
+    if (btn) showTab(name, btn);
+  } else {
+    // Default tab — set hash + title without a click
+    document.title = TAB_META.curve.title;
+    history.replaceState(null, '', '#' + TAB_META.curve.hash);
+  }
+})();
+
+function copyEl(id) {
+  const el = document.getElementById(id);
+  navigator.clipboard.writeText(el.value).catch(() => { el.select(); document.execCommand('copy'); });
+}
+
+// ═══════════════════════════════════════════════════════════
+// CURVE EDITOR
+// ═══════════════════════════════════════════════════════════
+
+const cc  = document.getElementById('cc');
+const ctx = cc.getContext('2d');
+
+const CSS_H = 260;
+const PAD   = { l: 68, r: 22, t: 24, b: 36 };
+const EDGE_PAD = 10; // px of breathing room from plot edges when dragging
+
+let N     = 6;
+let Y_MIN = 0.0;
+let Y_MAX = 0.1;
+let pts   = [];
+
+// Constrained-mode parameters
+let curveMode = 'free';
+let flatY  = 0.05;
+let rampS  = 0.0,  rampE  = 0.1;
+let bellLo = 0.0,  bellHi = 0.1;
+let valHi  = 0.1,  valLo  = 0.0;
+
+// Bezier handles in normalised plot coords:
+// nx: 0 = left edge, 1 = right edge
+// ny: 0 = top (Y_MAX), 1 = bottom (Y_MIN)
+let bezH1 = null;  // { nx, ny }
+let bezH2 = null;
+let bezSecT = 0.1; // position of fine-control handle along the stem (0–1)
+
+let drag  = null;  // null | integer index | 'h1' | 'h2' | 'area'
+let cssW  = 600;
+
+// ─── Coordinate helpers ───────────────────────────────────
+function pw()    { return cssW - PAD.l - PAD.r; }
+function ph()    { return CSS_H - PAD.t - PAD.b; }
+function ix2x(i) { return PAD.l + (i / Math.max(N - 1, 1)) * pw(); }
+function v2y(v)  { return PAD.t + (1 - (v - Y_MIN) / (Y_MAX - Y_MIN)) * ph(); }
+function y2v(y)  { return Math.max(Y_MIN, Math.min(Y_MAX, Y_MIN + (1 - (y - PAD.t) / ph()) * (Y_MAX - Y_MIN))); }
+
+// Normalised ↔ canvas pixel
+function nxToX(nx) { return PAD.l + nx * pw(); }
+function nyToY(ny) { return PAD.t + ny * ph(); }
+function xToNx(x)  { return (x - PAD.l) / pw(); }
+function yToNy(y)  { return (y - PAD.t) / ph(); }
+
+// Value ↔ normalised-y (ny=0 is top / Y_MAX)
+function vToNy(v)   { return 1 - (v - Y_MIN) / (Y_MAX - Y_MIN); }
+function nyToV(ny)  { return Math.max(Y_MIN, Math.min(Y_MAX, Y_MIN + (1 - ny) * (Y_MAX - Y_MIN))); }
+
+let decOverride = null; // null = auto; integer = fixed decimal places
+
+function nDec() {
+  if (decOverride !== null) return decOverride;
+  const r = Math.abs(Y_MAX - Y_MIN);
+  if (r === 0) return 4;
+  return Math.max(0, Math.min(8, 2 - Math.floor(Math.log10(r))));
+}
+
+function midVal() { return (Y_MIN + Y_MAX) / 2; }
+
+function initPts() {
+  pts = Array(N).fill(midVal());
+}
+
+// ─── Rebuild pts from mode params ────────────────────────
+function rebuild() {
+  const c = centerIdx();
+  if (curveMode === 'flat') {
+    pts = Array(N).fill(flatY);
+  } else if (curveMode === 'ramp') {
+    pts = Array.from({ length: N }, (_, i) => rampS + (rampE - rampS) * (i / (N - 1)));
+  } else if (curveMode === 'bell') {
+    pts = Array.from({ length: N }, (_, i) => {
+      const t = i / (N - 1);
+      return bellLo + (bellHi - bellLo) * Math.sin(t * Math.PI);
+    });
+  } else if (curveMode === 'valley') {
+    pts = Array.from({ length: N }, (_, i) => {
+      const t = i / (N - 1);
+      return valHi - (valHi - valLo) * Math.sin(t * Math.PI);
+    });
+  } else if (curveMode === 'bezier') {
+    rebuildBez();
+  }
+}
+
+function centerIdx() { return Math.round((N - 1) / 2); }
+
+// ─── Bezier ──────────────────────────────────────────────
+// Handle coords stored as absolute nx/ny (0-1 over the plot).
+// Displayed to user as relative: h1 rel_x = nx - 0, h2 rel_x = nx - 1;
+// rel_y = anchor_ny - ny (positive = up).
+// Default: (0.25, 0) and (-0.25, 0) — flat tangents pointing outward, straight line.
+
+function bezRelToAbs(handleKey, rel_x, rel_y) {
+  if (handleKey === 'h1') {
+    return { nx: rel_x,       ny: vToNy(pts[0])     - rel_y };
+  } else {
+    return { nx: 1 + rel_x,   ny: vToNy(pts[N - 1]) - rel_y };
+  }
+}
+
+function bezAbsToRel(handleKey, handle) {
+  if (handleKey === 'h1') {
+    return { x: handle.nx,       y: vToNy(pts[0])     - handle.ny };
+  } else {
+    return { x: handle.nx - 1,   y: vToNy(pts[N - 1]) - handle.ny };
+  }
+}
+
+function initBezHandles() {
+  bezH1 = bezRelToAbs('h1',  0.25, 0);
+  bezH2 = bezRelToAbs('h2', -0.25, 0);
+}
+
+function bezSampleNy(t) {
+  const ny0 = vToNy(pts[0]);
+  const ny3 = vToNy(pts[N - 1]);
+  const u = 1 - t;
+  return u*u*u*ny0 + 3*u*u*t*bezH1.ny + 3*u*t*t*bezH2.ny + t*t*t*ny3;
+}
+
+function rebuildBez() {
+  if (!bezH1) return;
+  for (let i = 1; i < N - 1; i++) {
+    pts[i] = nyToV(bezSampleNy(i / (N - 1)));
+  }
+}
+
+// ─── Mode switching ──────────────────────────────────────
+function setMode(m) {
+  curveMode = m;
+  document.querySelectorAll('.mode-row button').forEach(b => b.classList.remove('active-mode'));
+  document.getElementById('mode-' + m).classList.add('active-mode');
+
+  if (m === 'flat')   { flatY  = pts[Math.floor(N / 2)]; }
+  if (m === 'ramp')   { rampS  = pts[0]; rampE  = pts[N - 1]; }
+  if (m === 'bell')   { bellLo = Math.min(...pts); bellHi = Math.max(...pts); }
+  if (m === 'valley') { valHi  = Math.max(...pts); valLo  = Math.min(...pts); }
+  if (m === 'bezier') { if (!bezH1) initBezHandles(); }
+
+  if (m !== 'free') rebuild();
+  drawCurve();
+  updateKnobInputs();
+  syncOutput();
+}
+
+// ─── Canvas resize ───────────────────────────────────────
+function syncCC() {
+  const dpr  = window.devicePixelRatio || 1;
+  const rect = cc.getBoundingClientRect();
+  cssW = rect.width || 600;
+  const tw = Math.round(rect.width * dpr);
+  const th = Math.round(CSS_H * dpr);
+  if (cc.width !== tw || cc.height !== th) { cc.width = tw; cc.height = th; }
+}
+
+// ─── Draw ────────────────────────────────────────────────
+function drawCurve() {
+  syncCC();
+  const dpr = window.devicePixelRatio || 1;
+  ctx.save();
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, cssW, CSS_H);
+
+  const GREEN  = '#00ff00';
+  const DIM    = 'rgba(0,255,0,0.11)';
+  const GRID   = 'rgba(255,255,255,0.07)';
+  const AXIS   = 'rgba(255,255,255,0.14)';
+  const LABELS = '#909090';
+
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(0, 0, cssW, CSS_H);
+
+  const dec = nDec();
+
+  // Y grid
+  for (let i = 0; i <= 4; i++) {
+    const v  = Y_MIN + (Y_MAX - Y_MIN) * (i / 4);
+    const cy = v2y(v);
+    ctx.strokeStyle = GRID; ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(PAD.l, cy); ctx.lineTo(PAD.l + pw(), cy); ctx.stroke();
+    ctx.fillStyle = LABELS;
+    ctx.font = '10px Monaco, monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(v.toFixed(dec), PAD.l - 6, cy + 3.5);
+  }
+
+  // X grid
+  for (let i = 0; i < N; i++) {
+    const cx = ix2x(i);
+    ctx.strokeStyle = GRID; ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(cx, PAD.t); ctx.lineTo(cx, PAD.t + ph()); ctx.stroke();
+    ctx.fillStyle = LABELS;
+    ctx.font = '10px Monaco, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(String(i + 1), cx, PAD.t + ph() + 22);
+  }
+
+  // Axes
+  ctx.strokeStyle = AXIS; ctx.lineWidth = 0.5; ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(PAD.l, PAD.t);
+  ctx.lineTo(PAD.l, PAD.t + ph());
+  ctx.lineTo(PAD.l + pw(), PAD.t + ph());
+  ctx.stroke();
+
+  const cpts  = pts.map((v, i) => ({ x: ix2x(i), y: v2y(v) }));
+  const baseY = v2y(Y_MIN);
+
+  if (curveMode === 'bezier') {
+    const p0x = ix2x(0),     p0y = v2y(pts[0]);
+    const p3x = ix2x(N - 1), p3y = v2y(pts[N - 1]);
+    const cp1x = nxToX(bezH1.nx), cp1y = nyToY(bezH1.ny);
+    const cp2x = nxToX(bezH2.nx), cp2y = nyToY(bezH2.ny);
+
+    // Fill
+    ctx.beginPath();
+    ctx.moveTo(p0x, baseY); ctx.lineTo(p0x, p0y);
+    ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p3x, p3y);
+    ctx.lineTo(p3x, baseY); ctx.closePath();
+    ctx.fillStyle = DIM; ctx.fill();
+
+    // Curve
+    ctx.beginPath();
+    ctx.moveTo(p0x, p0y);
+    ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p3x, p3y);
+    ctx.strokeStyle = GREEN; ctx.lineWidth = 1.5; ctx.setLineDash([]); ctx.stroke();
+
+    // Handle stems — drawn with 'difference' blend so they invert whatever is beneath them
+    ctx.save();
+    ctx.globalCompositeOperation = 'difference';
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 1.25; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(p0x, p0y); ctx.lineTo(cp1x, cp1y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(p3x, p3y); ctx.lineTo(cp2x, cp2y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // Secondary fine-control handles at 1/10th along each stem
+    const s1x = p0x + bezSecT * (cp1x - p0x), s1y = p0y + bezSecT * (cp1y - p0y);
+    const s2x = p3x + bezSecT * (cp2x - p3x), s2y = p3y + bezSecT * (cp2y - p3y);
+    [[s1x, s1y, 'h1s'], [s2x, s2y, 'h2s']].forEach(([sx, sy, key]) => {
+      const active = drag === key;
+      ctx.beginPath(); ctx.arc(sx, sy, active ? 5 : 3.5, 0, Math.PI * 2);
+      ctx.fillStyle   = active ? GREEN : '#111'; ctx.fill();
+      ctx.strokeStyle = GREEN; ctx.lineWidth = 1; ctx.stroke();
+    });
+
+    // Handle diamonds
+    [[cp1x, cp1y, 'h1'], [cp2x, cp2y, 'h2']].forEach(([hx, hy, key]) => {
+      const active = drag === key;
+      ctx.save();
+      ctx.translate(hx, hy);
+      ctx.rotate(Math.PI / 4);
+      const s = active ? 5.5 : 4;
+      ctx.beginPath(); ctx.rect(-s, -s, s * 2, s * 2);
+      ctx.fillStyle   = active ? GREEN : '#111';
+      ctx.fill();
+      ctx.strokeStyle = GREEN; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.restore();
+    });
+
+    // Endpoint circles
+    [{ x: p0x, y: p0y, i: 0 }, { x: p3x, y: p3y, i: N - 1 }].forEach(({ x, y, i }) => {
+      ctx.strokeStyle = 'rgba(0,255,0,0.1)'; ctx.lineWidth = 0.75; ctx.setLineDash([3, 4]);
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, baseY); ctx.stroke();
+      ctx.setLineDash([]);
+      const active = drag === i;
+      ctx.beginPath(); ctx.arc(x, y, active ? 7 : 5, 0, Math.PI * 2);
+      ctx.fillStyle   = active ? GREEN : '#111'; ctx.fill();
+      ctx.strokeStyle = GREEN; ctx.lineWidth = 1.5; ctx.stroke();
+    });
+
+  } else {
+    // Catmull-Rom
+    const segs = catmullRom(cpts);
+
+    ctx.beginPath();
+    ctx.moveTo(cpts[0].x, baseY);
+    ctx.lineTo(cpts[0].x, cpts[0].y);
+    segs.forEach(s => ctx.bezierCurveTo(s.c1x, s.c1y, s.c2x, s.c2y, s.p2x, s.p2y));
+    ctx.lineTo(cpts[N - 1].x, baseY);
+    ctx.closePath();
+    ctx.fillStyle = DIM; ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(cpts[0].x, cpts[0].y);
+    segs.forEach(s => ctx.bezierCurveTo(s.c1x, s.c1y, s.c2x, s.c2y, s.p2x, s.p2y));
+    ctx.strokeStyle = GREEN; ctx.lineWidth = 1.5; ctx.setLineDash([]); ctx.stroke();
+
+    const canDrag = draggableSet();
+
+    cpts.forEach((p, i) => {
+      if (!canDrag.has(i)) {
+        ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0,255,0,0.2)'; ctx.fill();
+        return;
+      }
+      ctx.strokeStyle = 'rgba(0,255,0,0.1)'; ctx.lineWidth = 0.75; ctx.setLineDash([3, 4]);
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x, baseY); ctx.stroke();
+      ctx.setLineDash([]);
+      const active = drag === i;
+      ctx.beginPath(); ctx.arc(p.x, p.y, active ? 7 : 5, 0, Math.PI * 2);
+      ctx.fillStyle   = active ? GREEN : '#111'; ctx.fill();
+      ctx.strokeStyle = GREEN; ctx.lineWidth = 1.5; ctx.stroke();
+    });
+  }
+
+  ctx.restore();
+}
+
+function catmullRom(cpts) {
+  return cpts.slice(0, -1).map((_, i) => {
+    const p0 = i === 0            ? cpts[0]            : cpts[i - 1];
+    const p1 = cpts[i];
+    const p2 = cpts[i + 1];
+    const p3 = i + 2 >= cpts.length ? cpts[cpts.length - 1] : cpts[i + 2];
+    return {
+      p2x: p2.x, p2y: p2.y,
+      c1x: p1.x + (p2.x - p0.x) / 6,
+      c1y: p1.y + (p2.y - p0.y) / 6,
+      c2x: p2.x - (p3.x - p1.x) / 6,
+      c2y: p2.y - (p3.y - p1.y) / 6,
+    };
+  });
+}
+
+function draggableSet() {
+  const s = new Set();
+  const c = centerIdx();
+  if (curveMode === 'free' || curveMode === 'flat') {
+    for (let i = 0; i < N; i++) s.add(i);
+  } else if (curveMode === 'ramp') {
+    s.add(0); s.add(N - 1);
+  } else if (curveMode === 'bell' || curveMode === 'valley') {
+    s.add(0); s.add(c); s.add(N - 1);
+  }
+  return s;
+}
+
+// ─── Interaction ─────────────────────────────────────────
+function evPos(e) {
+  const r   = cc.getBoundingClientRect();
+  const src = e.touches ? e.touches[0] : e;
+  return { x: src.clientX - r.left, y: src.clientY - r.top };
+}
+
+function hit(pos, tx, ty, r) { return Math.hypot(pos.x - tx, pos.y - ty) < r; }
+
+function inPlot(pos) {
+  return pos.x >= PAD.l && pos.x <= PAD.l + pw() && pos.y >= PAD.t && pos.y <= PAD.t + ph();
+}
+
+cc.addEventListener('pointerdown',  onDown);
+cc.addEventListener('pointermove',  onMove);
+cc.addEventListener('pointerup',    onUp);
+cc.addEventListener('pointercancel',onUp);
+cc.addEventListener('touchstart', onDown, { passive: false });
+cc.addEventListener('touchmove',  onMove, { passive: false });
+cc.addEventListener('touchend',   onUp);
+
+function onDown(e) {
+  if (e.type === 'pointerdown' && e.pointerType !== 'touch') e.preventDefault();
+  syncCC();
+  const pos = evPos(e);
+  drag = null;
+
+  if (curveMode === 'bezier') {
+    // Compute secondary handle positions for hit testing
+    const p0x = ix2x(0),     p0y = v2y(pts[0]);
+    const p3x = ix2x(N - 1), p3y = v2y(pts[N - 1]);
+    const cp1x = bezH1 ? nxToX(bezH1.nx) : p0x, cp1y = bezH1 ? nyToY(bezH1.ny) : p0y;
+    const cp2x = bezH2 ? nxToX(bezH2.nx) : p3x, cp2y = bezH2 ? nyToY(bezH2.ny) : p3y;
+    const s1x = p0x + bezSecT * (cp1x - p0x), s1y = p0y + bezSecT * (cp1y - p0y);
+    const s2x = p3x + bezSecT * (cp2x - p3x), s2y = p3y + bezSecT * (cp2y - p3y);
+
+    if      (bezH1 && hit(pos, cp1x, cp1y, 14))   { drag = 'h1'; }
+    else if (bezH2 && hit(pos, cp2x, cp2y, 14))   { drag = 'h2'; }
+    else if (hit(pos, s1x, s1y, 10))               { drag = 'h1s'; }
+    else if (hit(pos, s2x, s2y, 10))               { drag = 'h2s'; }
+    else if (hit(pos, ix2x(0),     v2y(pts[0]),     14)) { drag = 0; }
+    else if (hit(pos, ix2x(N - 1), v2y(pts[N - 1]), 14)) { drag = N - 1; }
+    if (drag !== null && e.pointerId !== undefined) cc.setPointerCapture(e.pointerId);
+    return;
+  }
+
+  const canDrag = draggableSet();
+  let bestI = null, bestD = 18;
+  canDrag.forEach(i => {
+    const d = Math.hypot(pos.x - ix2x(i), pos.y - v2y(pts[i]));
+    if (d < bestD) { bestD = d; bestI = i; }
+  });
+
+  if (bestI !== null) {
+    drag = bestI;
+    if (e.pointerId !== undefined) cc.setPointerCapture(e.pointerId);
+  } else if (inPlot(pos)) {
+    if (curveMode === 'free') {
+      let nearI = 0, nearD = Infinity;
+      for (let i = 0; i < N; i++) {
+        const d = Math.abs(pos.x - ix2x(i));
+        if (d < nearD) { nearD = d; nearI = i; }
+      }
+      drag = nearI;
+      if (e.pointerId !== undefined) cc.setPointerCapture(e.pointerId);
+      pts[drag] = y2v(pos.y);
+      drawCurve(); updateKnobInputs(); syncOutput();
+    } else if (curveMode === 'flat') {
+      drag = 'area';
+      if (e.pointerId !== undefined) cc.setPointerCapture(e.pointerId);
+      flatY = y2v(pos.y);
+      rebuild(); drawCurve(); updateKnobInputs(); syncOutput();
+    }
+  }
+}
+
+function onMove(e) {
+  if (drag === null) return;
+  if (e.type === 'pointermove') e.preventDefault();
+  const pos = evPos(e);
+  const v   = y2v(pos.y);
+  const c   = centerIdx();
+
+  if (curveMode === 'bezier') {
+    if      (drag === 'h1')  { bezH1 = { nx: xToNx(pos.x), ny: yToNy(pos.y) }; }
+    else if (drag === 'h2')  { bezH2 = { nx: xToNx(pos.x), ny: yToNy(pos.y) }; }
+    else if (drag === 'h1s') {
+      // Secondary is at t=0.1 along stem from anchor; invert to get main handle position
+      const ancNx = 0, ancNy = vToNy(pts[0]);
+      const secNx = xToNx(pos.x), secNy = yToNy(pos.y);
+      bezH1 = { nx: ancNx + (secNx - ancNx) / bezSecT, ny: ancNy + (secNy - ancNy) / bezSecT };
+    }
+    else if (drag === 'h2s') {
+      const ancNx = 1, ancNy = vToNy(pts[N - 1]);
+      const secNx = xToNx(pos.x), secNy = yToNy(pos.y);
+      bezH2 = { nx: ancNx + (secNx - ancNx) / bezSecT, ny: ancNy + (secNy - ancNy) / bezSecT };
+    }
+    else if (drag === 0) {
+      const oldNy = vToNy(pts[0]);
+      pts[0] = v;
+      const delta = vToNy(pts[0]) - oldNy;
+      if (bezH1) bezH1 = { nx: bezH1.nx, ny: bezH1.ny + delta };
+    }
+    else if (drag === N - 1) {
+      const oldNy = vToNy(pts[N - 1]);
+      pts[N - 1] = v;
+      const delta = vToNy(pts[N - 1]) - oldNy;
+      if (bezH2) bezH2 = { nx: bezH2.nx, ny: bezH2.ny + delta };
+    }
+    rebuildBez();
+
+  } else if (curveMode === 'free') {
+    pts[drag] = v;
+
+  } else if (curveMode === 'flat' || drag === 'area') {
+    flatY = v; rebuild();
+
+  } else if (curveMode === 'ramp') {
+    if      (drag === 0)     { rampS = v; }
+    else if (drag === N - 1) { rampE = v; }
+    rebuild();
+
+  } else if (curveMode === 'bell') {
+    if (drag === c) {
+      const sinC = Math.sin((c / (N - 1)) * Math.PI);
+      bellHi = sinC > 0.001 ? bellLo + (v - bellLo) / sinC : v;
+    } else {
+      bellLo = v;
+    }
+    rebuild();
+
+  } else if (curveMode === 'valley') {
+    if (drag === c) {
+      const sinC = Math.sin((c / (N - 1)) * Math.PI);
+      valLo = sinC > 0.001 ? valHi - (valHi - v) / sinC : v;
+    } else {
+      valHi = v;
+    }
+    rebuild();
+  }
+
+  drawCurve();
+  updateKnobInputs();
+  syncOutput();
+}
+
+function onUp(e) {
+  if (drag !== null && e && e.pointerId !== undefined) {
+    try { cc.releasePointerCapture(e.pointerId); } catch (_) {}
+  }
+  drag = null;
+}
+
+// ─── Knob inputs ─────────────────────────────────────────
+function knobInputIndices() {
+  if (curveMode === 'bezier') return new Set([0, N - 1]);
+  return draggableSet();
+}
+
+function updateKnobInputs() {
+  const container = document.getElementById('knob-inputs');
+  const indices   = knobInputIndices();
+  const dec       = nDec();
+
+  // Remove inputs no longer needed
+  [...container.querySelectorAll('input')].forEach(inp => {
+    const idx = parseInt(inp.dataset.idx, 10);
+    if (!indices.has(idx)) inp.remove();
+  });
+
+  indices.forEach(i => {
+    const xPx = ix2x(i);
+    let inp = container.querySelector(`input[data-idx="${i}"]`);
+    if (!inp) {
+      inp = document.createElement('input');
+      inp.type = 'number';
+      inp.dataset.idx = i;
+      inp.step = 'any';
+      inp.addEventListener('input', () => {
+        const raw = parseFloat(inp.value);
+        if (isNaN(raw)) return;
+        const clamped = Math.max(Y_MIN, Math.min(Y_MAX, raw));
+        pts[i] = clamped;
+        if (curveMode === 'bezier') {
+          if (i === 0 && bezH1) {
+            const oldNy = vToNy(pts[0]);
+            pts[0] = clamped;
+            bezH1 = { nx: bezH1.nx, ny: bezH1.ny + (vToNy(pts[0]) - oldNy) };
+          } else if (i === N - 1 && bezH2) {
+            const oldNy = vToNy(pts[N - 1]);
+            pts[N - 1] = clamped;
+            bezH2 = { nx: bezH2.nx, ny: bezH2.ny + (vToNy(pts[N - 1]) - oldNy) };
+          }
+          rebuildBez();
+        }
+        else if (curveMode !== 'free') {
+          if (curveMode === 'ramp')   { rampS = pts[0]; rampE = pts[N-1]; rebuild(); }
+          if (curveMode === 'flat')   { flatY = pts[i]; rebuild(); }
+          if (curveMode === 'bell')   { if (i===0||i===N-1) { bellLo=clamped; } else { const s=Math.sin((i/(N-1))*Math.PI); bellHi=s>0.001?bellLo+(clamped-bellLo)/s:clamped; } rebuild(); }
+          if (curveMode === 'valley') { if (i===0||i===N-1) { valHi=clamped; } else { const s=Math.sin((i/(N-1))*Math.PI); valLo=s>0.001?valHi-(valHi-clamped)/s:clamped; } rebuild(); }
+        }
+        drawCurve(); updateBezPanel(); syncOutput();
+      });
+      container.appendChild(inp);
+    }
+    inp.value      = pts[i].toFixed(dec);
+    inp.style.left = xPx + 'px';
+  });
+
+  updateBezPanel();
+}
+
+function updateBezPanel() {
+  const panel = document.getElementById('bez-handle-controls');
+  if (curveMode !== 'bezier' || !bezH1 || !bezH2) {
+    panel.classList.remove('visible');
+    return;
+  }
+  panel.classList.add('visible');
+
+  const r1 = bezAbsToRel('h1', bezH1);
+  const r2 = bezAbsToRel('h2', bezH2);
+
+  document.getElementById('bh1-x').value = r1.x.toFixed(3);
+  document.getElementById('bh1-y').value = r1.y.toFixed(3);
+  document.getElementById('bh2-x').value = r2.x.toFixed(3);
+  document.getElementById('bh2-y').value = r2.y.toFixed(3);
+}
+
+// Wire panel inputs — run once after DOM ready
+(function wireBezPanelInputs() {
+  function handleLiveInput(handleKey) {
+    const rel_x = parseFloat(document.getElementById(`b${handleKey}-x`).value);
+    const rel_y = parseFloat(document.getElementById(`b${handleKey}-y`).value);
+    if (isNaN(rel_x) || isNaN(rel_y)) return;
+    const abs = bezRelToAbs(handleKey, rel_x, rel_y);
+    if (handleKey === 'h1') bezH1 = abs;
+    else                    bezH2 = abs;
+    rebuildBez(); drawCurve(); syncOutput();
+  }
+
+  ['h1', 'h2'].forEach(key => {
+    document.getElementById(`b${key}-x`).addEventListener('input', () => handleLiveInput(key));
+    document.getElementById(`b${key}-y`).addEventListener('input', () => handleLiveInput(key));
+  });
+})();
+
+function bezFlip(handleKey, axis) {
+  const h = handleKey === 'h1' ? bezH1 : bezH2;
+  if (!h) return;
+
+  if (axis === 'h') {
+    const anchorNx = handleKey === 'h1' ? 0 : 1;
+    h.nx = 2 * anchorNx - h.nx;
+  } else {
+    const anchorPt = handleKey === 'h1' ? pts[0] : pts[N - 1];
+    const anchorNy = vToNy(anchorPt);
+    h.ny = 2 * anchorNy - h.ny;
+  }
+
+  rebuildBez(); drawCurve(); updateBezPanel(); syncOutput();
+}
+
+function bezReset(handleKey) {
+  if (handleKey === 'h1') bezH1 = bezRelToAbs('h1',  0.25, 0);
+  else                    bezH2 = bezRelToAbs('h2', -0.25, 0);
+  rebuildBez(); drawCurve(); updateBezPanel(); syncOutput();
+}
+
+function setBezSecT(val) {
+  const parsed = parseFloat(val);
+  if (isNaN(parsed) || parsed <= 0 || parsed >= 1) return;
+  bezSecT = parsed;
+  drawCurve();
+}
+
+// ─── Config inputs ────────────────────────────────────────
+document.getElementById('cfg-dec').addEventListener('input', () => {
+  const raw = document.getElementById('cfg-dec').value;
+  decOverride = raw === '' ? null : Math.max(0, Math.min(8, parseInt(raw, 10)));
+  drawCurve(); updateKnobInputs(); syncOutput();
+});
+document.getElementById('cfg-n').addEventListener('input', () => {
+  const raw = parseInt(document.getElementById('cfg-n').value, 10);
+  if (!isNaN(raw) && raw >= 2 && raw <= 32 && raw !== N) {
+    N = raw;
+    initPts();
+    bezH1 = null; bezH2 = null;
+  }
+  rebuild(); drawCurve(); updateKnobInputs(); syncOutput();
+});
+
+['cfg-min', 'cfg-max'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => {
+    const mn = parseFloat(document.getElementById('cfg-min').value);
+    const mx = parseFloat(document.getElementById('cfg-max').value);
+    if (!isNaN(mn) && !isNaN(mx) && mx > mn) {
+      Y_MIN = mn; Y_MAX = mx;
+      pts = pts.map(v => Math.max(Y_MIN, Math.min(Y_MAX, v)));
+    }
+    drawCurve(); updateKnobInputs(); syncOutput();
+  });
+});
+
+// ─── Input / Output ───────────────────────────────────────
+function parseNums(text) {
+  const tokens = text.match(/-?(?:\d+\.?\d*|\.\d+)/g);
+  return tokens ? tokens.map(Number).filter(v => !isNaN(v)) : [];
+}
+
+// Returns null (inline) or { firstIndent, restIndent } (per-line)
+function detectFmt(text) {
+  const lines = text.split('\n');
+
+  const numLineIndices = lines.reduce((acc, l, i) => {
+    const matches = l.match(/-?(?:\d+\.?\d*|\.\d+)/g) || [];
+    if (matches.length === 1) acc.push(i);
+    return acc;
+  }, []);
+
+  if (numLineIndices.length < 2) return null;
+
+  const firstNumIdx = numLineIndices[0];
+  const lastNumIdx  = numLineIndices[numLineIndices.length - 1];
+
+  const hasMulti = lines.slice(firstNumIdx, lastNumIdx + 1).some(
+    l => (l.match(/-?(?:\d+\.?\d*|\.\d+)/g) || []).length > 1
+  );
+  if (hasMulti) return null;
+
+  const secondIdx = numLineIndices.length > 1 ? numLineIndices[1] : firstNumIdx;
+  return {
+    prefix:      lines.slice(0, firstNumIdx).join('\n'),
+    suffix:      lines.slice(lastNumIdx + 1).join('\n'),
+    firstIndent: (lines[firstNumIdx].match(/^(\s*)/) || ['',''])[1],
+    restIndent:  (lines[secondIdx].match(/^(\s*)/)   || ['',''])[1],
+  };
+}
+
+function loadCurveInput() {
+  const text = document.getElementById('curve-in').value;
+  const nums = parseNums(text);
+  if (nums.length < 2) return;
+  N = nums.length;
+  document.getElementById('cfg-n').value = N;
+
+  const dataMin = Math.min(...nums);
+  const dataMax = Math.max(...nums);
+  Y_MIN = dataMin;
+  Y_MAX = dataMax === dataMin ? dataMin + 1 : dataMax;
+  document.getElementById('cfg-min').value = Y_MIN;
+  document.getElementById('cfg-max').value = Y_MAX;
+
+  pts   = nums.slice();
+  bezH1 = null; bezH2 = null;
+  if (curveMode !== 'free') setMode(curveMode);
+  else { drawCurve(); updateKnobInputs(); syncOutput(); }
+}
+
+function syncOutput() {
+  const inputText = document.getElementById('curve-in').value;
+  const fmt = detectFmt(inputText);
+  const dec = nDec();
+  let out;
+
+  if (fmt) {
+    const numLines = pts.map((v, i) => {
+      const indent = i === 0 ? fmt.firstIndent : fmt.restIndent;
+      return indent + v.toFixed(dec) + (i < N - 1 ? ',' : '');
+    });
+    const parts = [];
+    if (fmt.prefix.length > 0) parts.push(fmt.prefix);
+    parts.push(numLines.join('\n'));
+    if (fmt.suffix.length > 0) parts.push(fmt.suffix);
+    out = parts.join('\n');
+  } else {
+    out = pts.map((v, i) => v.toFixed(dec) + (i < N - 1 ? ', ' : '')).join('');
+  }
+
+  document.getElementById('curve-out').value = out;
+}
+
+
+function snapRange(dec) {
+  const factor = Math.pow(10, dec);
+  Y_MIN = Math.floor(Y_MIN * factor) / factor;
+  Y_MAX = Math.ceil(Y_MAX * factor) / factor;
+  if (Y_MAX <= Y_MIN) Y_MAX = Y_MIN + (1 / factor);
+  document.getElementById('cfg-min').value = Y_MIN;
+  document.getElementById('cfg-max').value = Y_MAX;
+  pts = pts.map(v => Math.max(Y_MIN, Math.min(Y_MAX, v)));
+  drawCurve(); updateKnobInputs(); syncOutput();
+}
+
+function copyCurveOut() {
+  navigator.clipboard.writeText(document.getElementById('curve-out').value).catch(() => {});
+}
+
+// ─── Resize ──────────────────────────────────────────────
+new ResizeObserver(() => { syncCC(); drawCurve(); updateKnobInputs(); }).observe(cc);
+
+// ─── Init ────────────────────────────────────────────────
+initPts();
+syncCC();
+drawCurve();
+updateKnobInputs();
+syncOutput();
+
+
+// ═══════════════════════════════════════════════════════════
+// OKLCH BATCH TOOL
+// ═══════════════════════════════════════════════════════════
+
+const okIn  = document.getElementById('oklch-in');
+const okOut = document.getElementById('oklch-out');
+
+let okSettings = {
+  property: 'hue', mode: 'offset',
+  offset: 0, startIn: 0, endIn: 360, startOut: 0, endOut: 360,
+  easeType: 'linear', intensity: 1,
+};
+
+function extractOklch(text) {
+  const re  = /oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)/g;
+  const out = [];
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    out.push({ full: m[0], idx: m.index, l: parseFloat(m[1]), c: parseFloat(m[2]), h: parseFloat(m[3]) });
+  }
+  return out;
+}
+
+function xfOklch(val, prop) {
+  const lim = { hue: 360, chroma: 0.5, lightness: 1 }[prop];
+  const s   = okSettings;
+  if (s.mode === 'offset') {
+    const n = val + s.offset;
+    return prop === 'hue' ? ((n % 360) + 360) % 360 : Math.max(0, Math.min(n, lim));
+  }
+  if (s.mode === 'remap') {
+    const t = Math.max(0, Math.min((val - s.startIn) / (s.endIn - s.startIn), 1));
+    return s.startOut + t * (s.endOut - s.startOut);
+  }
+  if (s.mode === 'ease') {
+    let t = Math.max(0, Math.min((val - s.startIn) / (s.endIn - s.startIn), 1));
+    if (s.easeType === 'ease-in')     t = t * t;
+    if (s.easeType === 'ease-out')    t = 1 - (1 - t) * (1 - t);
+    if (s.easeType === 'ease-in-out') t = t < 0.5 ? 2*t*t : -1 + 4*t - 2*t*t;
+    return s.startOut + t * s.intensity * (s.endOut - s.startOut);
+  }
+}
+
+function updateOkOutput() {
+  const matches = extractOklch(okIn.value);
+  const keyMap  = { hue: 'h', chroma: 'c', lightness: 'l' };
+  const key     = keyMap[okSettings.property];
+  let res       = okIn.value;
+  [...matches].sort((a, b) => b.idx - a.idx).forEach(m => {
+    const nc = { l: m.l, c: m.c, h: m.h };
+    nc[key]  = xfOklch(m[key], okSettings.property);
+    const t  = `oklch(${nc.l.toFixed(2)} ${nc.c.toFixed(3)} ${nc.h.toFixed(2)})`;
+    res = res.substring(0, m.idx) + t + res.substring(m.idx + m.full.length);
+  });
+  okOut.value = res;
+}
+
+function setOkSetting(key, val) {
+  okSettings[key] = (key === 'easeType') ? val : (parseFloat(val) || 0);
+  updateOkOutput();
+}
+
+function renderOkControls() {
+  const s    = okSettings;
+  const lims = { hue: { min: -180, max: 180 }, chroma: { min: -0.5, max: 0.5 }, lightness: { min: -1, max: 1 } };
+  const lim  = lims[s.property];
+  const maxV = s.property === 'hue' ? 360 : s.property === 'chroma' ? 0.5 : 1;
+  const cont = document.getElementById('ok-controls');
+
+  if (s.mode === 'offset') {
+    cont.innerHTML = `
+      <div class="slider-row">
+        <label>Offset</label>
+        <input type="range" id="ok-r" min="${lim.min}" max="${lim.max}" value="${s.offset}" step="0.01"
+          oninput="setOkSetting('offset',this.value);document.getElementById('ok-n').value=parseFloat(this.value).toFixed(4)">
+        <input type="number" id="ok-n" value="${s.offset.toFixed(4)}" step="0.01"
+          oninput="setOkSetting('offset',this.value);document.getElementById('ok-r').value=this.value">
+      </div>`;
+  } else if (s.mode === 'remap') {
+    cont.innerHTML = `
+      <div class="range-grid">
+        <div class="control-group"><label>Input Start</label><input type="number" value="${s.startIn.toFixed(3)}" step="0.01" oninput="setOkSetting('startIn',this.value)"></div>
+        <div class="control-group"><label>Input End</label><input type="number" value="${s.endIn.toFixed(3)}" step="0.01" oninput="setOkSetting('endIn',this.value)"></div>
+        <div class="control-group"><label>Output Start</label><input type="number" value="${s.startOut.toFixed(3)}" step="0.01" oninput="setOkSetting('startOut',this.value)"></div>
+        <div class="control-group"><label>Output End</label><input type="number" value="${s.endOut.toFixed(3)}" step="0.01" oninput="setOkSetting('endOut',this.value)"></div>
+      </div>`;
+  } else if (s.mode === 'ease') {
+    cont.innerHTML = `
+      <div class="control-group" style="max-width:240px;margin-bottom:12px">
+        <label>Easing</label>
+        <select onchange="setOkSetting('easeType',this.value)">
+          <option value="linear"      ${s.easeType==='linear'      ?'selected':''}>Linear</option>
+          <option value="ease-in"     ${s.easeType==='ease-in'     ?'selected':''}>Ease In</option>
+          <option value="ease-out"    ${s.easeType==='ease-out'    ?'selected':''}>Ease Out</option>
+          <option value="ease-in-out" ${s.easeType==='ease-in-out' ?'selected':''}>Ease In-Out</option>
+        </select>
+      </div>
+      <div class="range-grid">
+        <div class="control-group"><label>Start</label><input type="number" value="${s.startOut.toFixed(3)}" step="0.01" oninput="setOkSetting('startOut',this.value)"></div>
+        <div class="control-group"><label>End</label><input type="number" value="${s.endOut.toFixed(3)}" step="0.01" oninput="setOkSetting('endOut',this.value)"></div>
+      </div>
+      <div class="control-group" style="max-width:130px;margin-top:10px">
+        <label>Intensity</label>
+        <input type="number" value="${s.intensity.toFixed(2)}" step="0.01" min="0" oninput="setOkSetting('intensity',this.value)">
+      </div>`;
+  }
+}
+
+function updateTransformer() {
+  const np = document.getElementById('ok-prop').value;
+  const nm = document.getElementById('ok-mode').value;
+  if (np !== okSettings.property) {
+    const mx = np === 'hue' ? 360 : np === 'chroma' ? 0.5 : 1;
+    okSettings.startIn = 0; okSettings.endIn = mx;
+    okSettings.startOut = 0; okSettings.endOut = mx;
+  }
+  okSettings.property = np;
+  okSettings.mode     = nm;
+  renderOkControls();
+  updateOkOutput();
+}
+
+okIn.addEventListener('input', updateOkOutput);
+updateTransformer();
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "$schema": "../../schemas/convert.schema.json",
+  "inputFiles": [
+    "./output_images/your-avatar.svg"
+  ]
+}

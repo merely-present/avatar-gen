@@ -8,7 +8,7 @@ const { execSync } = require('child_process');
 function showHelp() {
     console.log(
         'Usage: npm run pull-fonts\n' +
-        '       node src/pull_fonts.js\n' +
+        '       node src/pull-fonts.js\n' +
         '\n' +
         'Installs each font listed in config/fonts.json from fontsource into\n' +
         'node_modules. Fonts are used directly from there at render time.\n' +

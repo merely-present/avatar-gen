@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "inputFiles": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Input SVG file paths"
+    },
+    "outputDir": {
+      "description": "Parent directory for output sub-directories; defaults to same dir as each input",
+      "type": "string"
+    },
+    "textFont": {
+      "description": "Override font family (auto-detected from SVG if omitted)",
+      "type": "string"
+    }
+  },
+  "required": [
+    "inputFiles"
+  ],
+  "additionalProperties": false
+}

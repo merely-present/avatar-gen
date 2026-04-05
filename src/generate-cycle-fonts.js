@@ -6,6 +6,9 @@ const path = require('path');
 const { execSync } = require('child_process');
 const puppeteer = require('puppeteer-core');
 
+const { loadAndValidateJson }  = require('./load-json.js');
+const { GenerateConfigSchema } = require('./schemas.js');
+
 function findChromium() {
     if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH;
     for (const bin of ['chromium-browser', 'chromium', 'chromium-headless']) {
@@ -34,82 +37,72 @@ function fontStatus() {
 
 function showHelp() {
     console.log(
-        'Usage: npm run generate-cycle-fonts -- [options]\n' +
-        '       node src/generate_cycle_fonts.js [options]\n' +
+        'Usage: npm run generate-cycle-fonts -- --json <path/to/preset.generate.json> [--res <n>] [--output-dir <path>]\n' +
+        '       node src/generate-cycle-fonts.js --json <path/to/preset.generate.json>\n' +
         '\n' +
         'Renders one avatar per font in config/fonts.json.\n' +
-        'All generate_avatar.js flags are forwarded (except --text-font, controlled here).\n' +
+        'The text-font field from the JSON is overridden for each font.\n' +
         '\n' +
-        'Own options:\n' +
-        '  --res <n>            PNG render resolution, square px  [400]\n' +
-        '  --output-dir <path>  Batch output directory  [cwd]\n' +
+        'Extra CLI options (override JSON values):\n' +
+        '  --res <n>            PNG render resolution, square px\n' +
+        '  --output-dir <path>  Batch output directory\n' +
         '\n' +
         'Output: <output-dir>/font_cycle_<datetime>/<font-slug>.{svg,png}\n' +
         '\n' +
         'Fonts (config/fonts.json):\n' +
         fontStatus() + '\n' +
         '\n' +
-        '  Run `npm run pull-fonts` to install fonts to ~/.local/share/fonts\n'
+        '  Run `npm run pull-fonts` to install all listed fonts\n'
     );
 }
 
 const ROOT            = path.join(__dirname, '..');
 const FONTS_JSON      = path.join(ROOT, 'config', 'fonts.json');
-const GENERATE_AVATAR = path.join(__dirname, 'generate_avatar.js');
+const GENERATE_AVATAR = path.join(__dirname, 'generate-avatar.js');
 
 // ---------------------------------------------------------------------------
-// Arg parsing
+// CLI: --json <path> required; --res and --output-dir may override JSON values
 // ---------------------------------------------------------------------------
-if (process.argv.slice(2).some(a => a === '--help' || a === '-h')) { showHelp(); process.exit(0); }
+const argv = process.argv.slice(2);
+if (argv.some(a => a === '--help' || a === '-h')) { showHelp(); process.exit(0); }
 
-const MY_KEYS = new Set(['output-dir', 'res']);
-const argv    = process.argv.slice(2);
-const myOpts  = {};
-const passthroughKV = {};
+let jsonPath    = null;
+let resOverride = null;
+let outputDirOverride = null;
 
-for (let argIndex = 0; argIndex < argv.length; argIndex++) {
-    const argToken = argv[argIndex];
-    if (!argToken.startsWith('--')) continue;
-    const eqSignIndex = argToken.indexOf('=');
-    const argKey      = eqSignIndex >= 0 ? argToken.slice(2, eqSignIndex) : argToken.slice(2);
-    const argValue    = eqSignIndex >= 0 ? argToken.slice(eqSignIndex + 1) : argv[++argIndex];
-    if (MY_KEYS.has(argKey)) {
-        myOpts[argKey] = argValue;
-    } else if (argKey !== 'text-font') {  // we control --text-font
-        passthroughKV[argKey] = argValue;
-    }
+for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--json')       { jsonPath           = argv[++i]; continue; }
+    if (argv[i] === '--res')        { resOverride        = parseInt(argv[++i], 10); continue; }
+    if (argv[i] === '--output-dir') { outputDirOverride  = argv[++i]; continue; }
 }
 
-const res       = parseInt(myOpts.res || '400', 10);
-const outputDir = myOpts['output-dir']
-    ? path.resolve(myOpts['output-dir'])
-    : process.cwd();
+if (!jsonPath) {
+    console.error('Error: --json <path> is required.\nRun with --help for usage.');
+    process.exit(1);
+}
+
+const config    = loadAndValidateJson(jsonPath, GenerateConfigSchema);
+const res       = resOverride ?? 400;
+const outputDir = outputDirOverride
+    ? path.resolve(outputDirOverride)
+    : (config.outputDir ? path.resolve(config.outputDir) : process.cwd());
 
 // ---------------------------------------------------------------------------
-// Batch output dir
+// Batch output dir (timestamped)
 // ---------------------------------------------------------------------------
-const now       = new Date();
-const padStart2 = n => String(n).padStart(2, '0');
+const now   = new Date();
+const pad2  = n => String(n).padStart(2, '0');
 const tzOffset  = -now.getTimezoneOffset();
 const tzSign    = tzOffset >= 0 ? '+' : '-';
-const tzHours   = padStart2(Math.floor(Math.abs(tzOffset) / 60));
-const tzMinutes = padStart2(Math.abs(tzOffset) % 60);
-const timestamp = [
-    now.getFullYear(),
-    '-', padStart2(now.getMonth() + 1),
-    '-', padStart2(now.getDate()),
-    '_', padStart2(now.getHours()),
-    '-', padStart2(now.getMinutes()),
-    '-', padStart2(now.getSeconds()),
-    '_', tzSign, tzHours, tzMinutes,
-].join('');
+const tzHours   = pad2(Math.floor(Math.abs(tzOffset) / 60));
+const tzMins    = pad2(Math.abs(tzOffset) % 60);
+const timestamp = `${now.getFullYear()}-${pad2(now.getMonth()+1)}-${pad2(now.getDate())}_${pad2(now.getHours())}-${pad2(now.getMinutes())}-${pad2(now.getSeconds())}_${tzSign}${tzHours}${tzMins}`;
 
 const batchDir = path.join(outputDir, `font_cycle_${timestamp}`);
 fs.mkdirSync(batchDir, { recursive: true });
 
 // ---------------------------------------------------------------------------
-// Font embedding — reads WOFF2 from ~/.local/share/fonts, returns @font-face
-// CSS for inline embedding in the HTML page Puppeteer renders.
+// Font embedding helper
 // ---------------------------------------------------------------------------
 const FONTSOURCE_DIR = path.join(__dirname, '..', 'node_modules', '@fontsource');
 
@@ -120,38 +113,17 @@ function buildFontFaceCSS(fontFamily, pkgSlug) {
         process.exit(1);
     }
     const allFiles = fs.readdirSync(filesDir);
-    // Prefer latin subset; fall back to any WOFF2 for this package
-    let matching = allFiles.filter(fileName => fileName.startsWith(pkgSlug + '-latin') && fileName.endsWith('.woff2'));
+    let matching = allFiles.filter(f => f.startsWith(pkgSlug + '-latin') && f.endsWith('.woff2'));
     if (matching.length === 0)
-        matching = allFiles.filter(fileName => fileName.startsWith(pkgSlug) && fileName.endsWith('.woff2'));
+        matching = allFiles.filter(f => f.startsWith(pkgSlug) && f.endsWith('.woff2'));
     if (matching.length === 0) return null;
-    return matching.map(fileName => {
-        const fileMatch  = fileName.match(/-(\d+)-(normal|italic)\.woff2$/);
-        const weight     = fileMatch ? fileMatch[1] : '400';
-        const fontStyle  = fileMatch ? fileMatch[2] : 'normal';
-        const base64Data = fs.readFileSync(path.join(filesDir, fileName)).toString('base64');
-        return `@font-face{font-family:'${fontFamily}';src:url('data:font/woff2;base64,${base64Data}')format('woff2');font-weight:${weight};font-style:${fontStyle};}`;
+    return matching.map(f => {
+        const m      = f.match(/-(\d+)-(normal|italic)\.woff2$/);
+        const weight = m ? m[1] : '400';
+        const style  = m ? m[2] : 'normal';
+        const b64    = fs.readFileSync(path.join(filesDir, f)).toString('base64');
+        return `@font-face{font-family:'${fontFamily}';src:url('data:font/woff2;base64,${b64}')format('woff2');font-weight:${weight};font-style:${style};}`;
     }).join('');
-}
-
-// ---------------------------------------------------------------------------
-// Build CLI args
-// ---------------------------------------------------------------------------
-function buildCli(overrides) {
-    const mergedArgs = { ...passthroughKV, ...overrides };
-    const argParts   = [];
-    for (const [argKey, argValue] of Object.entries(mergedArgs)) {
-        const val = String(argValue);
-        // Use --key=value when value starts with '-' to avoid parseArgs ambiguity
-        if (val.startsWith('-')) argParts.push(`--${argKey}=${val}`);
-        else argParts.push(`--${argKey}`, val);
-    }
-    return argParts;
-}
-
-function shellEscape(a) {
-    if (/^[a-zA-Z0-9_.\/=:+-]+$/.test(a)) return a;
-    return "'" + a.replace(/'/g, "'\\''") + "'";
 }
 
 // ---------------------------------------------------------------------------
@@ -159,6 +131,8 @@ function shellEscape(a) {
 // ---------------------------------------------------------------------------
 const fonts = JSON.parse(fs.readFileSync(FONTS_JSON, 'utf8'));
 console.log(`Generating ${fonts.length} font variants → ${batchDir}`);
+
+const tempConfigPath = path.join(batchDir, '_font_config.json');
 
 (async () => {
     const browser = await puppeteer.launch({ executablePath: CHROMIUM_EXEC, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
@@ -170,11 +144,12 @@ console.log(`Generating ${fonts.length} font variants → ${batchDir}`);
         const svgPath = path.join(batchDir, `${slug}.svg`);
         const pngPath = path.join(batchDir, `${slug}.png`);
 
-        const cliArgs    = buildCli({ 'text-font': font.name, 'output': svgPath });
-        const escapedArgs = cliArgs.map(shellEscape);
+        const fontConfig = { ...config, textFont: font.name, 'output': svgPath };
+        delete fontConfig.outputDir;
+        fs.writeFileSync(tempConfigPath, JSON.stringify(fontConfig), 'utf8');
 
         try {
-            execSync(`node ${JSON.stringify(GENERATE_AVATAR)} ${escapedArgs.join(' ')}`, {
+            execSync(`node ${JSON.stringify(GENERATE_AVATAR)} --json ${JSON.stringify(tempConfigPath)}`, {
                 cwd:   __dirname,
                 stdio: ['pipe', 'pipe', 'pipe'],
             });
@@ -204,6 +179,8 @@ console.log(`Generating ${fonts.length} font variants → ${batchDir}`);
 
         console.log(`  ${font.name} → ${slug}.png`);
     }
+
+    try { fs.unlinkSync(tempConfigPath); } catch {}
 
     await browser.close();
     console.log(`Done: ${batchDir}`);

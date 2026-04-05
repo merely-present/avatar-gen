@@ -1,0 +1,562 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "outputDir": {
+      "description": "Output directory; timestamped filename if output omitted",
+      "type": "string"
+    },
+    "waveFreqExpr": {
+      "default": "8 - 6*x",
+      "description": "JS expression where x=0(top)..1(bottom) → wave frequency",
+      "type": "string"
+    },
+    "waveCount": {
+      "default": 16,
+      "description": "Number of primary waves",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "waveStartDegree": {
+      "default": 0,
+      "description": "Starting hue, degrees",
+      "type": "number"
+    },
+    "waveDistance": {
+      "default": 360,
+      "description": "Total hue sweep top→bottom, degrees; negative sweeps backward",
+      "type": "number"
+    },
+    "waveColorLoopCount": {
+      "default": 1,
+      "description": "Multiplies hue sweep for denser colour cycling",
+      "type": "number"
+    },
+    "waveLightness": {
+      "default": 0.7261,
+      "description": "Wave colour oklch L",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "waveChroma": {
+      "default": 0.18,
+      "description": "Wave colour oklch C",
+      "type": "number",
+      "minimum": 0
+    },
+    "waveAmplitude": {
+      "default": 15,
+      "description": "Wave amplitude, px",
+      "type": "number"
+    },
+    "shadowDarkness": {
+      "default": 0.8,
+      "description": "Shadow L multiplier 0–1",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "waveEffect": {
+      "default": "smear-down",
+      "description": "Wave rendering effect",
+      "type": "string",
+      "enum": [
+        "none",
+        "smear-down",
+        "motion-blur",
+        "ripple",
+        "posterize",
+        "erode",
+        "dilate",
+        "gaussian"
+      ]
+    },
+    "waveEffectStrength": {
+      "default": 4,
+      "type": "number"
+    },
+    "lobeCount": {
+      "default": 7,
+      "description": "Number of flower lobes",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "lobeBumpiness": {
+      "default": 0.075,
+      "description": "Lobe amplitude as fraction of flower radius, per layer center→outside (cycles)",
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        }
+      ]
+    },
+    "lobeGapRatio": {
+      "default": 0.09,
+      "description": "Gap between layers as fraction of flower radius, per gap center→outside (cycles)",
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        }
+      ]
+    },
+    "lobeGapExponent": {
+      "default": 1,
+      "description": "Scales gap size by position: 1=uniform, >1=tunnel (inner gaps compressed)",
+      "type": "number"
+    },
+    "flowerSize": {
+      "default": 0.15,
+      "description": "Flower diameter as fraction of avatar diameter",
+      "type": "number",
+      "minimum": 0
+    },
+    "flowerOpacity": {
+      "default": 1,
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "flowerLightness": {
+      "default": 0.57,
+      "description": "oklch L reference (scales all flower-colors L proportionally)",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "flowerChroma": {
+      "default": 0.1,
+      "description": "oklch C reference (scales all flower-colors C proportionally)",
+      "type": "number",
+      "minimum": 0
+    },
+    "flowerLayerBlur": {
+      "default": 1,
+      "description": "Fade distance (px) at each petal boundary — follows shape, no hard edges",
+      "type": "number",
+      "minimum": 0
+    },
+    "flowerTurbulenceFreq": {
+      "default": 0.02,
+      "description": "feTurbulence baseFrequency for organic edge wobble; 0 = disabled",
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        }
+      ]
+    },
+    "flowerTurbulenceScale": {
+      "default": 10,
+      "description": "feDisplacementMap scale for wobble amount",
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        }
+      ]
+    },
+    "flowerTurbulenceOctaves": {
+      "default": 1,
+      "description": "feTurbulence numOctaves",
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        }
+      ]
+    },
+    "flowerTurbulenceType": {
+      "default": "fractalNoise",
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "fractalNoise",
+            "turbulence"
+          ]
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "fractalNoise",
+              "turbulence"
+            ]
+          }
+        }
+      ]
+    },
+    "flowerOuterGlow": {
+      "default": 0.05,
+      "description": "Halo extending outward from flower edge, as fraction of flower diameter",
+      "type": "number",
+      "minimum": 0
+    },
+    "flowerOuterGlowColor": {
+      "default": "oklch(0.85 0.155 171 / 0.5)",
+      "type": "string",
+      "minLength": 1
+    },
+    "flowerOuterGlowOpacity": {
+      "default": 0.25,
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "flowerOuterGlowTwinkle": {
+      "default": 0.15,
+      "description": "Outer glow size twinkle, fraction of flower diameter",
+      "type": "number",
+      "minimum": 0
+    },
+    "flowerOuterGlowTwinkleColor": {
+      "default": "oklch(0.9 0.19 115.19)",
+      "type": "string",
+      "minLength": 1
+    },
+    "flowerOuterGlowTwinkleOpacity": {
+      "default": 0.25,
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "flowerInnerGlow": {
+      "default": 0.05,
+      "description": "Rim extending inward from flower edge, as fraction of flower diameter",
+      "type": "number",
+      "minimum": 0
+    },
+    "flowerInnerGlowColor": {
+      "default": "oklch(0.85 0.155 171 / 0.5)",
+      "type": "string",
+      "minLength": 1
+    },
+    "flowerInnerGlowOpacity": {
+      "default": 0.25,
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "flowerInnerGlowTwinkle": {
+      "default": 0.15,
+      "type": "number",
+      "minimum": 0
+    },
+    "flowerInnerGlowTwinkleColor": {
+      "default": "oklch(0.9 0.19 115.19)",
+      "type": "string",
+      "minLength": 1
+    },
+    "flowerInnerGlowTwinkleOpacity": {
+      "default": 0.25,
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "flowerColors": {
+      "description": "Flower layer colours outermost→innermost (oklch strings). Omit to use built-in default palette.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "polygonRingColors": {
+      "description": "Polygon ring colours; must be odd-length: even indices = outline strokes, odd indices = triangle connector strokes. Omit to use built-in default palette.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "outerPolygonEdges": {
+      "default": 12,
+      "type": "integer",
+      "minimum": 3,
+      "maximum": 9007199254740991
+    },
+    "outerPolygonRadius": {
+      "default": 190,
+      "description": "Radius of outermost ring, px",
+      "type": "number"
+    },
+    "polygonRingStep": {
+      "default": 22,
+      "description": "Radial step between rings, px",
+      "type": "number"
+    },
+    "polygonNodeRadius": {
+      "default": 2,
+      "type": "number",
+      "minimum": 0
+    },
+    "polygonNodeGlow": {
+      "default": 4,
+      "description": "Node glow blur radius, px",
+      "type": "number",
+      "minimum": 0
+    },
+    "polygonNodeFade": {
+      "default": 1,
+      "description": "Node edge fade zone, px",
+      "type": "number",
+      "minimum": 0
+    },
+    "polygonNodeTwinkle": {
+      "default": 10,
+      "description": "% of nodes randomly lit brighter, 0–100",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "polygonNodeTwinkleRadius": {
+      "default": 3,
+      "type": "number",
+      "minimum": 0
+    },
+    "polygonNodeTwinkleGlow": {
+      "default": 6,
+      "type": "number",
+      "minimum": 0
+    },
+    "polygonNodeTwinkleFade": {
+      "default": 2,
+      "type": "number",
+      "minimum": 0
+    },
+    "twinkleStrength": {
+      "default": 1,
+      "description": "Blend strength for all twinkle effects: 0=identical 1=full twinkle",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "flowerSeed": {
+      "description": "Flower RNG seed; defaults to seed if omitted",
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "text": {
+      "default": "/^merely\npresent/",
+      "description": "Text content; \\n for newlines",
+      "type": "string"
+    },
+    "textSize": {
+      "default": 40,
+      "description": "Font size px",
+      "type": "number",
+      "minimum": 1
+    },
+    "textLineHeight": {
+      "default": 1,
+      "description": "Line spacing multiplier (1.0 = font natural line height)",
+      "type": "number"
+    },
+    "textGlowDistance": {
+      "default": 4,
+      "description": "Glow blur spread px",
+      "type": "number",
+      "minimum": 0
+    },
+    "textGlowStrength": {
+      "default": 1,
+      "description": "Glow intensity 0–1+",
+      "type": "number"
+    },
+    "textBackingSpread": {
+      "default": 5,
+      "description": "Black backing shadow blur, px",
+      "type": "number",
+      "minimum": 0
+    },
+    "textBackingDilate": {
+      "default": 3,
+      "description": "Expand text before blurring, px",
+      "type": "number",
+      "minimum": 0
+    },
+    "textBackingOpacity": {
+      "default": 0.9,
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "textFont": {
+      "default": "DejaVu Sans Mono",
+      "type": "string"
+    },
+    "textOffsetX": {
+      "default": 0,
+      "description": "Horizontal offset, fraction of SVG size (positive = right)",
+      "type": "number"
+    },
+    "textOffsetY": {
+      "default": 0,
+      "description": "Vertical offset, fraction of SVG size (positive = up)",
+      "type": "number"
+    },
+    "seeds": {
+      "description": "Per-cycle RNG seeds; auto-extended if fewer than twinkle-cycles",
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": -9007199254740991,
+        "maximum": 9007199254740991
+      }
+    },
+    "fps": {
+      "default": 10,
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "timePerTwinkleMs": {
+      "default": 1000,
+      "anyOf": [
+        {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "array",
+          "items": [
+            {
+              "type": "number",
+              "description": "rise ms"
+            },
+            {
+              "type": "number",
+              "description": "hold-high ms"
+            },
+            {
+              "type": "number",
+              "description": "fall ms"
+            },
+            {
+              "type": "number",
+              "description": "hold-low ms"
+            }
+          ]
+        }
+      ]
+    },
+    "twinkleCycles": {
+      "default": 4,
+      "description": "Number of unique seed cycles in the animation",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "res": {
+      "default": 400,
+      "description": "Output resolution, square px",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "name": {
+      "default": "generated_animation",
+      "description": "Base name for the output GIF file",
+      "type": "string"
+    }
+  },
+  "required": [
+    "waveFreqExpr",
+    "waveCount",
+    "waveStartDegree",
+    "waveDistance",
+    "waveColorLoopCount",
+    "waveLightness",
+    "waveChroma",
+    "waveAmplitude",
+    "shadowDarkness",
+    "waveEffect",
+    "waveEffectStrength",
+    "lobeCount",
+    "lobeBumpiness",
+    "lobeGapRatio",
+    "lobeGapExponent",
+    "flowerSize",
+    "flowerOpacity",
+    "flowerLightness",
+    "flowerChroma",
+    "flowerLayerBlur",
+    "flowerTurbulenceFreq",
+    "flowerTurbulenceScale",
+    "flowerTurbulenceOctaves",
+    "flowerTurbulenceType",
+    "flowerOuterGlow",
+    "flowerOuterGlowColor",
+    "flowerOuterGlowOpacity",
+    "flowerOuterGlowTwinkle",
+    "flowerOuterGlowTwinkleColor",
+    "flowerOuterGlowTwinkleOpacity",
+    "flowerInnerGlow",
+    "flowerInnerGlowColor",
+    "flowerInnerGlowOpacity",
+    "flowerInnerGlowTwinkle",
+    "flowerInnerGlowTwinkleColor",
+    "flowerInnerGlowTwinkleOpacity",
+    "outerPolygonEdges",
+    "outerPolygonRadius",
+    "polygonRingStep",
+    "polygonNodeRadius",
+    "polygonNodeGlow",
+    "polygonNodeFade",
+    "polygonNodeTwinkle",
+    "polygonNodeTwinkleRadius",
+    "polygonNodeTwinkleGlow",
+    "polygonNodeTwinkleFade",
+    "twinkleStrength",
+    "text",
+    "textSize",
+    "textLineHeight",
+    "textGlowDistance",
+    "textGlowStrength",
+    "textBackingSpread",
+    "textBackingDilate",
+    "textBackingOpacity",
+    "textFont",
+    "textOffsetX",
+    "textOffsetY",
+    "fps",
+    "timePerTwinkleMs",
+    "twinkleCycles",
+    "res",
+    "name"
+  ],
+  "additionalProperties": false
+}

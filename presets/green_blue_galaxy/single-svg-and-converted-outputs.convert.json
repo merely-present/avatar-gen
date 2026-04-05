@@ -1,0 +1,7 @@
+{
+  "$schema": "../../schemas/convert.schema.json",
+  "inputFiles": [
+    "./output_images/merely-present-avatar-TIMESTAMP.svg"
+  ],
+  "outputDir": "./output_images"
+}
