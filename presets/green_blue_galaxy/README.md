@@ -40,10 +40,10 @@ npm run generate -- --json presets/green_blue_galaxy/single-svg-output.twinkle-s
 
 ### SVG → PNG/JPEG — `single-svg-and-converted-outputs.convert.json`
 
-Edit `input-files` to point at the generated SVG, then run:
+Generates `single-svg-output.twinkle-strength-1.generate.json` and immediately converts the result:
 
 ```bash
-npm run convert -- --json presets/green_blue_galaxy/single-svg-and-converted-outputs.convert.json
+npm run generate -- --json presets/green_blue_galaxy/single-svg-output.twinkle-strength-1.generate.json | sed -n 's/^Done: //p' | xargs -r -I {} npm run convert -- --json presets/green_blue_galaxy/single-svg-and-converted-outputs.convert.json --input-files {}
 ```
 
 ### Animated GIF (small, quick) — `animated-gif-output.small-and-quick.animate.json`

@@ -1,6 +1,6 @@
 {
   "$schema": "../../schemas/generate.schema.json",
-  "seed": 385653283,
+  "seed": 1982931710,
   "flowerSeed": 3856532837,
   "outputDir": "./output_images",
   "waveFreqExpr": "8 - 6*x",

@@ -22,8 +22,8 @@ npm run generate -- --json presets/green_blue_galaxy/single-svg-output.twinkle-s
 
 # Generate and convert to PNG/JPEG
 npm run generate -- --json presets/green_blue_galaxy/single-svg-output.twinkle-strength-1.generate.json \
-  | tail -n 1 | sed 's|.* ||' \
-  | xargs -I {} npm run convert -- --json presets/green_blue_galaxy/single-svg-and-converted-outputs.convert.json
+  | sed -n 's/^Done: //p' \
+  | xargs -r -I {} npm run convert -- --json presets/green_blue_galaxy/single-svg-and-converted-outputs.convert.json --input-files {}
 
 # Generate an animated GIF (small/quick)
 npm run generate-animated -- --json presets/green_blue_galaxy/animated-gif-output.small-and-quick.animate.json

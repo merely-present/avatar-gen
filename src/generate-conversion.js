@@ -28,7 +28,7 @@ const RESOLUTIONS = [200, 400, 600, 800, 1000, 1080, 1200, 1600, 2000, 4000];
 
 function showHelp() {
     console.log(
-        'Usage: npm run convert -- --json <path/to/preset.convert.json>\n' +
+        'Usage: npm run convert -- --json <path/to/preset.convert.json> [--input-files <file> ...]\n' +
         '       node src/generate-conversion.js --json <path/to/preset.convert.json>\n' +
         '\n' +
         'All settings are provided through a JSON file validated against\n' +
@@ -38,6 +38,9 @@ function showHelp() {
         '  input-files     Array of SVG file paths to convert (required)\n' +
         '  output-dir      Parent for output dirs  [same dir as each input file]\n' +
         '  text-font       Override font family  [auto-detected from SVG]\n' +
+        '\n' +
+        'CLI overrides:\n' +
+        '  --input-files <f1> [f2 ...]   Override inputFiles from the JSON\n' +
         '\n' +
         'Resolutions: ' + RESOLUTIONS.join(', ') + '\n' +
         '\n' +
@@ -66,7 +69,13 @@ if (!jsonPath || jsonPath.startsWith('--')) {
 
 const config = loadAndValidateJson(jsonPath, ConvertConfigSchema);
 
-const inputFiles   = config.inputFiles.map(f => resolve(f));
+// --input-files <f1> [f2 ...] overrides inputFiles from the JSON config
+const inputFilesFlagIndex = argv.indexOf('--input-files');
+const rawInputFiles = inputFilesFlagIndex !== -1
+    ? argv.slice(inputFilesFlagIndex + 1).filter(a => !a.startsWith('--'))
+    : config.inputFiles;
+
+const inputFiles   = rawInputFiles.map(f => resolve(f));
 const outputDirOpt = config.outputDir ? resolve(config.outputDir) : null;
 const fontOverride = config.textFont ?? null;
 
