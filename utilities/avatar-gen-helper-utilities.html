@@ -164,6 +164,9 @@ label { font-size: 11px; color: #9a9a9a; }
   height: 30px;
   margin-bottom: 14px;
 }
+#knob-inputs.double-row {
+  height: 58px;
+}
 #knob-inputs input {
   position: absolute;
   width: 66px;
@@ -172,6 +175,11 @@ label { font-size: 11px; color: #9a9a9a; }
   padding: 3px 5px;
   text-align: center;
   border-radius: 4px;
+}
+#knob-inputs input.exp-sub {
+  top: 32px;
+  border-color: #2a6099;
+  color: #6cb6ff;
 }
 
 #bez-handle-controls {
@@ -379,6 +387,8 @@ input[type="range"]::-moz-range-thumb {
       <button id="mode-bell"   onclick="setMode('bell')">bell</button>
       <button id="mode-valley" onclick="setMode('valley')">valley</button>
       <button id="mode-bezier" onclick="setMode('bezier')">bezier ends</button>
+      <button id="mode-exp"    onclick="setMode('exp')">exponential</button>
+      <button id="exp-flip-btn" style="display:none" onclick="expFlip()" title="Swap start and end values">⇅ flip</button>
     </div>
 
     <div class="two-col">
@@ -500,6 +510,7 @@ let flatY  = 0.05;
 let rampS  = 0.0,  rampE  = 0.1;
 let bellLo = 0.0,  bellHi = 0.1;
 let valHi  = 0.1,  valLo  = 0.0;
+let expS   = 0.0,  expE   = 0.1,  expExp = 2.0,  expFlipped = false;
 
 // Bezier handles in normalised plot coords:
 // nx: 0 = left edge, 1 = right edge
@@ -562,6 +573,12 @@ function rebuild() {
     });
   } else if (curveMode === 'bezier') {
     rebuildBez();
+  } else if (curveMode === 'exp') {
+    pts = Array.from({ length: N }, (_, i) => {
+      const t = i / (N - 1);
+      const shaped = expFlipped ? 1 - Math.pow(1 - t, expExp) : Math.pow(t, expExp);
+      return expS + (expE - expS) * shaped;
+    });
   }
 }
 
@@ -619,6 +636,9 @@ function setMode(m) {
   if (m === 'bell')   { bellLo = Math.min(...pts); bellHi = Math.max(...pts); }
   if (m === 'valley') { valHi  = Math.max(...pts); valLo  = Math.min(...pts); }
   if (m === 'bezier') { if (!bezH1) initBezHandles(); }
+  if (m === 'exp')    { expS = pts[0]; expE = pts[N - 1]; expExp = 2.0; expFlipped = false; }
+
+  document.getElementById('exp-flip-btn').style.display = m === 'exp' ? '' : 'none';
 
   if (m !== 'free') rebuild();
   drawCurve();
@@ -752,8 +772,50 @@ function drawCurve() {
       ctx.strokeStyle = GREEN; ctx.lineWidth = 1.5; ctx.stroke();
     });
 
+  } else if (curveMode === 'exp') {
+    // Draw analytically — sample 200 points so the curve is perfectly smooth
+    const steps = 200;
+    ctx.beginPath();
+    ctx.moveTo(ix2x(0), baseY);
+    ctx.lineTo(ix2x(0), v2y(expS));
+    for (let s = 0; s <= steps; s++) {
+      const t = s / steps;
+      const shaped = expFlipped ? 1 - Math.pow(1 - t, expExp) : Math.pow(t, expExp);
+      const val = expS + (expE - expS) * shaped;
+      const cx  = PAD.l + t * pw();
+      const cy  = v2y(val);
+      if (s === 0) ctx.lineTo(cx, cy); else ctx.lineTo(cx, cy);
+    }
+    ctx.lineTo(ix2x(N - 1), baseY);
+    ctx.closePath();
+    ctx.fillStyle = DIM; ctx.fill();
+
+    ctx.beginPath();
+    for (let s = 0; s <= steps; s++) {
+      const t = s / steps;
+      const shaped = expFlipped ? 1 - Math.pow(1 - t, expExp) : Math.pow(t, expExp);
+      const val = expS + (expE - expS) * shaped;
+      const cx  = PAD.l + t * pw();
+      const cy  = v2y(val);
+      if (s === 0) ctx.moveTo(cx, cy); else ctx.lineTo(cx, cy);
+    }
+    ctx.strokeStyle = GREEN; ctx.lineWidth = 1.5; ctx.setLineDash([]); ctx.stroke();
+
+    // Draw the 3 draggable knobs (start, center, end) over the analytical curve
+    const canDrag = draggableSet();
+    cpts.forEach((p, i) => {
+      if (!canDrag.has(i)) return;
+      ctx.strokeStyle = 'rgba(0,255,0,0.1)'; ctx.lineWidth = 0.75; ctx.setLineDash([3, 4]);
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x, baseY); ctx.stroke();
+      ctx.setLineDash([]);
+      const active = drag === i;
+      ctx.beginPath(); ctx.arc(p.x, p.y, active ? 7 : 5, 0, Math.PI * 2);
+      ctx.fillStyle   = active ? GREEN : '#111'; ctx.fill();
+      ctx.strokeStyle = GREEN; ctx.lineWidth = 1.5; ctx.stroke();
+    });
+
   } else {
-    // Catmull-Rom
+    // Catmull-Rom for all other modes
     const segs = catmullRom(cpts);
 
     ctx.beginPath();
@@ -814,6 +876,8 @@ function draggableSet() {
   } else if (curveMode === 'ramp') {
     s.add(0); s.add(N - 1);
   } else if (curveMode === 'bell' || curveMode === 'valley') {
+    s.add(0); s.add(c); s.add(N - 1);
+  } else if (curveMode === 'exp') {
     s.add(0); s.add(c); s.add(N - 1);
   }
   return s;
@@ -958,6 +1022,29 @@ function onMove(e) {
       valHi = v;
     }
     rebuild();
+
+  } else if (curveMode === 'exp') {
+    if (drag === 0)     { expS = v; }
+    else if (drag === N - 1) { expE = v; }
+    else if (drag === c) {
+      const t_c = c / (N - 1);
+      const range = expE - expS;
+      if (Math.abs(range) > 1e-9 && t_c > 0 && t_c < 1) {
+        const norm = Math.max(1e-6, Math.min(1 - 1e-6, (v - expS) / range));
+        if (expFlipped) {
+          // norm = 1 - (1-t)^exp  =>  (1-t)^exp = 1-norm  =>  exp = log(1-norm)/log(1-t_c)
+          const base = 1 - t_c;
+          const val  = 1 - norm;
+          if (base > 1e-9 && val > 1e-9)
+            expExp = Math.max(0.1, Math.min(20, Math.log(val) / Math.log(base)));
+        } else {
+          // norm = t^exp  =>  exp = log(norm)/log(t_c)
+          if (t_c > 1e-9 && norm > 1e-9)
+            expExp = Math.max(0.1, Math.min(20, Math.log(norm) / Math.log(t_c)));
+        }
+      }
+    }
+    rebuild();
   }
 
   drawCurve();
@@ -983,10 +1070,15 @@ function updateKnobInputs() {
   const indices   = knobInputIndices();
   const dec       = nDec();
 
-  // Remove inputs no longer needed
-  [...container.querySelectorAll('input')].forEach(inp => {
+  // Remove primary knob inputs no longer needed
+  [...container.querySelectorAll('input[data-idx]')].forEach(inp => {
     const idx = parseInt(inp.dataset.idx, 10);
     if (!indices.has(idx)) inp.remove();
+  });
+  // Remove orphaned exp sub-inputs
+  [...container.querySelectorAll('input[data-exp-idx]')].forEach(sub => {
+    const idx = parseInt(sub.dataset.expIdx, 10);
+    if (curveMode !== 'exp' || !indices.has(idx)) sub.remove();
   });
 
   indices.forEach(i => {
@@ -1019,6 +1111,26 @@ function updateKnobInputs() {
           if (curveMode === 'flat')   { flatY = pts[i]; rebuild(); }
           if (curveMode === 'bell')   { if (i===0||i===N-1) { bellLo=clamped; } else { const s=Math.sin((i/(N-1))*Math.PI); bellHi=s>0.001?bellLo+(clamped-bellLo)/s:clamped; } rebuild(); }
           if (curveMode === 'valley') { if (i===0||i===N-1) { valHi=clamped; } else { const s=Math.sin((i/(N-1))*Math.PI); valLo=s>0.001?valHi-(valHi-clamped)/s:clamped; } rebuild(); }
+          if (curveMode === 'exp') {
+            if (i === 0) { expS = clamped; }
+            else if (i === N-1) { expE = clamped; }
+            else {
+              const t_c = i / (N - 1);
+              const range = expE - expS;
+              if (Math.abs(range) > 1e-9 && t_c > 0 && t_c < 1) {
+                const norm = Math.max(1e-6, Math.min(1 - 1e-6, (clamped - expS) / range));
+                if (expFlipped) {
+                  const base = 1 - t_c, val = 1 - norm;
+                  if (base > 1e-9 && val > 1e-9)
+                    expExp = Math.max(0.1, Math.min(20, Math.log(val) / Math.log(base)));
+                } else {
+                  if (t_c > 1e-9 && norm > 1e-9)
+                    expExp = Math.max(0.1, Math.min(20, Math.log(norm) / Math.log(t_c)));
+                }
+              }
+            }
+            rebuild();
+          }
         }
         drawCurve(); updateBezPanel(); syncOutput();
       });
@@ -1026,7 +1138,41 @@ function updateKnobInputs() {
     }
     inp.value      = pts[i].toFixed(dec);
     inp.style.left = xPx + 'px';
+    inp.style.top  = '0px';
+
+    // Exponent sub-input — only for exp mode center knob
+    const isExpCenter = curveMode === 'exp' && i === centerIdx();
+    const existingSub = container.querySelector(`input[data-exp-idx="${i}"]`);
+
+    if (isExpCenter) {
+      container.classList.add('double-row');
+      let sub = existingSub;
+      if (!sub) {
+        sub = document.createElement('input');
+        sub.type = 'number';
+        sub.dataset.expIdx = i;
+        sub.step = '0.01';
+        sub.min  = '0.1';
+        sub.max  = '20';
+        sub.title = 'exponent';
+        sub.classList.add('exp-sub');
+        sub.addEventListener('input', () => {
+          const raw = parseFloat(sub.value);
+          if (isNaN(raw) || raw <= 0) return;
+          expExp = Math.max(0.1, Math.min(20, raw));
+          rebuild(); drawCurve(); updateKnobInputs(); syncOutput();
+        });
+        container.appendChild(sub);
+      }
+      sub.value      = expExp.toFixed(3);
+      sub.style.left = xPx + 'px';
+    } else {
+      if (existingSub) existingSub.remove();
+    }
   });
+
+  // Remove double-row class if no exp center present
+  if (curveMode !== 'exp') container.classList.remove('double-row');
 
   updateBezPanel();
 }
@@ -1093,6 +1239,13 @@ function setBezSecT(val) {
   if (isNaN(parsed) || parsed <= 0 || parsed >= 1) return;
   bezSecT = parsed;
   drawCurve();
+}
+
+function expFlip() {
+  expFlipped = !expFlipped;
+  const btn = document.getElementById('exp-flip-btn');
+  btn.classList.toggle('active-mode', expFlipped);
+  rebuild(); drawCurve(); updateKnobInputs(); syncOutput();
 }
 
 // ─── Config inputs ────────────────────────────────────────
