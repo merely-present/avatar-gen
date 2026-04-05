@@ -4,6 +4,12 @@ Vibe-coded slop for generating variations of my GitHub profile picture. Tweaked 
 
 Generates layered SVGs with animated color waves, an organic multi-petal flower, and a polygon node ring. Can export to PNG/JPEG and assemble animated GIFs.
 
+## Example Output
+
+Animated output from the `green_blue_galaxy` large preset:
+
+![Green-Blue Galaxy large animated output](examples/green-blue-galaxy-large.gif)
+
 ## Requirements
 
 - Node.js (developed on v25)
